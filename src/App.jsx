@@ -1,13 +1,14 @@
 import React, { useState, useEffect } from "react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { BrowserRouter, Routes, Route } from "react-router-dom";
-import NotFound from "./pages/NotFound";
-import Dashboard from "./pages/Dashboard";  // Change path to where your components actually are
+import Dashboard from "./pages/Dashboard";  
 import NewServe from "./pages/NewServe";
 import DataExport from "./pages/DataExport";
 import Clients from "./pages/Clients";
 import History from "./pages/History";
+import NotFound from "./pages/NotFound";
 import Layout from "./components/Layout";
+import api from "./services/api";
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -26,9 +27,8 @@ function App() {
   useEffect(() => {
     const fetchData = async () => {
       try {
-        const response = await fetch('/.netlify/functions/api/clients');
-        const data = await response.json();
-        setClients(data);
+        const response = await api.get('/clients');
+        setClients(response.data || []);
       } catch (error) {
         console.error("Error fetching clients:", error);
       }
@@ -40,9 +40,8 @@ function App() {
   useEffect(() => {
     const fetchServes = async () => {
       try {
-        const response = await fetch('/.netlify/functions/api/serves');
-        const data = await response.json();
-        setServes(data);
+        const response = await api.get('/serves');
+        setServes(response.data || []);
       } catch (error) {
         console.error("Error fetching serves:", error);
       }

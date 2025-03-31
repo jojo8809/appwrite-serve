@@ -17,4 +17,5 @@ export function Toaster() {
   );
 }
 
-export const toast = sonnerToast;
+// Re-export toast from sonner directly
+export { sonnerToast as toast };

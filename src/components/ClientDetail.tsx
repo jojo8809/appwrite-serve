@@ -1,3 +1,4 @@
+
 import React, { useState } from "react";
 import { 
   Card, 
@@ -21,6 +22,7 @@ import ClientForm from "./ClientForm";
 import ClientCases from "./ClientCases";
 import { ClientData } from "./ClientForm";
 import { useIsMobile } from "@/hooks/use-mobile";
+import { appwrite } from "@/lib/appwrite";
 
 interface ClientDetailProps {
   client: ClientData;

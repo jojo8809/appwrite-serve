@@ -1,5 +1,5 @@
 
-import { supabase, isSupabaseConfigured } from "@/lib/supabase";
+import { appwrite } from "@/lib/appwrite";
 
 interface EmailProps {
   to: string | string[];
@@ -10,7 +10,7 @@ interface EmailProps {
 }
 
 /**
- * Sends an email using Supabase Edge Functions
+ * Sends an email using Appwrite Functions
  */
 export const sendEmail = async (props: EmailProps): Promise<{ success: boolean; message: string }> => {
   let { to, subject, body, imageData, coordinates } = props;
@@ -36,17 +36,17 @@ export const sendEmail = async (props: EmailProps): Promise<{ success: boolean; 
     console.log("No image data provided");
   }
   
-  // Check if Supabase is properly configured
-  if (!isSupabaseConfigured()) {
-    console.error("Supabase is not configured. Email sending will fail.");
+  // Check if Appwrite is properly configured
+  if (!appwrite.isAppwriteConfigured()) {
+    console.error("Appwrite is not configured. Email sending will fail.");
     return {
       success: false,
-      message: "Supabase is not configured. Cannot send email."
+      message: "Appwrite is not configured. Cannot send email."
     };
   }
   
   try {
-    console.log("Preparing to call Supabase Edge Function 'send-email'");
+    console.log("Preparing to call Appwrite Function for email");
     
     // Validate email format for each recipient
     for (const email of recipients) {
@@ -59,43 +59,13 @@ export const sendEmail = async (props: EmailProps): Promise<{ success: boolean; 
       }
     }
     
-    // Prepare image data for transmission
-    // Remove the data URL prefix if present
-    const processedImageData = imageData ? imageData.replace(/^data:image\/(png|jpeg|jpg);base64,/, '') : undefined;
-    
-    console.log(`Sending email to ${recipients.length} recipients:`, recipients);
-    
-    // Call Supabase Edge Function for sending email with detailed logging
-    const { data, error } = await supabase.functions.invoke('send-email', {
-      body: {
-        to: recipients, // Send to all recipients in a single request
-        subject,
-        body,
-        imageData: processedImageData,
-        imageFormat: imageData ? (imageData.includes('data:image/png') ? 'png' : 'jpeg') : undefined,
-        coordinates: coordinates ? {
-          latitude: coordinates.latitude,
-          longitude: coordinates.longitude,
-          accuracy: coordinates.accuracy
-        } : undefined
-      }
+    return await appwrite.sendEmail({
+      to: recipients,
+      subject,
+      body,
+      imageData,
+      coordinates
     });
-
-    console.log("Response from edge function:", { data, error });
-
-    if (error) {
-      console.error(`Error calling send-email function:`, error);
-      return {
-        success: false,
-        message: error.message || "Failed to send email"
-      };
-    }
-
-    console.log(`Response from send-email function:`, data);
-    return {
-      success: true,
-      message: data?.message || `Email sent to ${recipients.join(", ")}`
-    };
   } catch (error) {
     console.error(`Exception in email sending:`, error);
     return {

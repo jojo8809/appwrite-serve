@@ -5,9 +5,9 @@ import { ClientData } from "@/components/ClientForm";
 import { ServeAttemptData } from "@/components/ServeAttempt";
 import { Button } from "@/components/ui/button";
 import { History as HistoryIcon, RefreshCw } from "lucide-react";
-import { syncSupabaseServesToLocal } from "@/lib/supabase";
 import { useToast } from "@/hooks/use-toast";
 import EditServeDialog from "@/components/EditServeDialog";
+import { appwrite } from "@/lib/appwrite";
 
 interface HistoryProps {
   serves: ServeAttemptData[];
@@ -32,16 +32,27 @@ const History: React.FC<HistoryProps> = ({
     
     setIsSyncing(true);
     try {
-      const synced = await syncSupabaseServesToLocal();
+      const synced = await appwrite.syncAppwriteServesToLocal();
       
       if (synced) {
-        console.log("Success: History refreshed successfully");
+        toast({
+          title: "History Refreshed",
+          description: "Serve history has been updated with the latest data."
+        });
       } else {
-        console.log("Error: Failed to refresh history");
+        toast({
+          title: "Refresh Failed",
+          description: "Could not refresh serve history. Please try again.",
+          variant: "destructive"
+        });
       }
     } catch (error) {
       console.error("Error refreshing history:", error);
-      console.log("Error: An error occurred while refreshing");
+      toast({
+        title: "Error",
+        description: "An error occurred while refreshing serve history.",
+        variant: "destructive"
+      });
     } finally {
       setIsSyncing(false);
     }

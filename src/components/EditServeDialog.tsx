@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect } from "react";
 import {
   Dialog,
@@ -21,7 +22,7 @@ import { Label } from "@/components/ui/label";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { ServeAttemptData } from "./ServeAttempt";
 import { sendEmail, createUpdateNotificationEmail } from "@/utils/email";
-import { supabase } from "@/lib/supabase";
+import { appwrite } from "@/lib/appwrite";
 import { isGeolocationCoordinates } from "@/utils/gps";
 
 interface EditServeDialogProps {
@@ -61,15 +62,13 @@ export default function EditServeDialog({ serve, open, onOpenChange, onSave }: E
     const fetchClientEmail = async () => {
       if (serve.clientId) {
         try {
-          const { data, error } = await supabase
-            .from('clients')
-            .select('email, name')
-            .eq('id', serve.clientId)
-            .single();
+          // Fetch the client information from Appwrite
+          const clients = await appwrite.getClients();
+          const client = clients.find(c => c.$id === serve.clientId);
           
-          if (data && !error) {
-            setClientEmail(data.email);
-            setClientName(data.name || "Client");
+          if (client) {
+            setClientEmail(client.email);
+            setClientName(client.name || "Client");
           }
         } catch (error) {
           console.error("Error fetching client email:", error);

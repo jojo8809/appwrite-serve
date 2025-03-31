@@ -8,26 +8,26 @@ export interface CustomToastProps {
   variant?: "default" | "destructive";
 }
 
-// Create a fully typed toast object
-export const toast = {
-  // Default toast method
-  (props?: CustomToastProps): string | number => {
-    if (props) {
-      const { title, description, variant } = props;
-      if (variant === "destructive") {
-        return sonnerToast.error(title, { description });
-      }
-      return sonnerToast(title, { description });
+// Create the base toast function
+const toastFn = (props?: CustomToastProps): string | number => {
+  if (props) {
+    const { title, description, variant } = props;
+    if (variant === "destructive") {
+      return sonnerToast.error(title, { description });
     }
-    return sonnerToast("Notification");
-  },
-  
-  // Toast variants as methods
-  error: (title?: string, options?: any) => sonnerToast.error(title, options),
-  success: (title?: string, options?: any) => sonnerToast.success(title, options),
-  warning: (title?: string, options?: any) => sonnerToast.warning(title, options),
-  info: (title?: string, options?: any) => sonnerToast.info(title, options),
+    return sonnerToast(title, { description });
+  }
+  return sonnerToast("Notification");
 };
+
+// Add methods to the function
+toastFn.error = (title?: string, options?: any) => sonnerToast.error(title, options);
+toastFn.success = (title?: string, options?: any) => sonnerToast.success(title, options);
+toastFn.warning = (title?: string, options?: any) => sonnerToast.warning(title, options);
+toastFn.info = (title?: string, options?: any) => sonnerToast.info(title, options);
+
+// Export as toast
+export const toast = toastFn;
 
 // Create useToast hook for compatibility with existing code
 export const useToast = () => {

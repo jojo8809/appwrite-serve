@@ -1,6 +1,5 @@
 module.exports = {
   plugins: {
-    tailwindcss: {},
-    autoprefixer: {},
-  },
+    // Empty plugins object to avoid loading tailwindcss
+  }
 };

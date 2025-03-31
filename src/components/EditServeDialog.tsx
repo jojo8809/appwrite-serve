@@ -24,6 +24,8 @@ import { ServeAttemptData } from "./ServeAttempt";
 import { sendEmail, createUpdateNotificationEmail } from "@/utils/email";
 import { appwrite } from "@/lib/appwrite";
 import { isGeolocationCoordinates } from "@/utils/gps";
+import { ACTIVE_BACKEND, BACKEND_PROVIDER } from "@/config/backendConfig";
+import { supabase } from "@/lib/supabase";
 
 interface EditServeDialogProps {
   serve: ServeAttemptData;
@@ -62,13 +64,27 @@ export default function EditServeDialog({ serve, open, onOpenChange, onSave }: E
     const fetchClientEmail = async () => {
       if (serve.clientId) {
         try {
-          // Fetch the client information from Appwrite
-          const clients = await appwrite.getClients();
-          const client = clients.find(c => c.$id === serve.clientId);
-          
-          if (client) {
-            setClientEmail(client.email);
-            setClientName(client.name || "Client");
+          if (ACTIVE_BACKEND === BACKEND_PROVIDER.APPWRITE) {
+            // Fetch the client information from Appwrite
+            const clients = await appwrite.getClients();
+            const client = clients.find(c => c.$id === serve.clientId);
+            
+            if (client) {
+              setClientEmail(client.email);
+              setClientName(client.name || "Client");
+            }
+          } else {
+            // Fetch from Supabase
+            const { data, error } = await supabase
+              .from('clients')
+              .select('email, name')
+              .eq('id', serve.clientId)
+              .single();
+              
+            if (!error && data) {
+              setClientEmail(data.email);
+              setClientName(data.name || "Client");
+            }
           }
         } catch (error) {
           console.error("Error fetching client email:", error);
@@ -190,7 +206,7 @@ export default function EditServeDialog({ serve, open, onOpenChange, onSave }: E
                 id="notes"
                 value={notes}
                 onChange={(e) => setNotes(e.target.value)}
-                placeholder="Enter any notes about this serve attempt"
+                placeholder="Add notes about this serve attempt"
                 rows={4}
               />
             </div>

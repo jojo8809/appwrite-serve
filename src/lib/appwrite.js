@@ -1,11 +1,13 @@
+
 import { Client, Account, Databases, Storage, ID, Query, Teams, Functions } from 'appwrite';
+import { APPWRITE_CONFIG } from '@/config/backendConfig';
 
 // Initialize Appwrite client
 const client = new Client();
 
 client
-  .setEndpoint(import.meta.env.VITE_APPWRITE_ENDPOINT || 'https://cloud.appwrite.io/v1')
-  .setProject(import.meta.env.VITE_APPWRITE_PROJECT_ID || '67ead974001245b7c6aa');
+  .setEndpoint(import.meta.env.VITE_APPWRITE_ENDPOINT || APPWRITE_CONFIG.endpoint)
+  .setProject(import.meta.env.VITE_APPWRITE_PROJECT_ID || APPWRITE_CONFIG.projectId);
 
 // Initialize Appwrite services
 const account = new Account(client);
@@ -14,13 +16,13 @@ const storage = new Storage(client);
 const teams = new Teams(client);
 const functions = new Functions(client);
 
-// Database and collection IDs
-const DATABASE_ID = 'serve-tracker-db';
-const CLIENTS_COLLECTION_ID = 'clients';
-const SERVE_ATTEMPTS_COLLECTION_ID = 'serve_attempts';
-const CASES_COLLECTION_ID = 'client_cases';
-const DOCUMENTS_COLLECTION_ID = 'client_documents';
-const STORAGE_BUCKET_ID = 'client-documents';
+// Database and collection IDs from config
+const DATABASE_ID = APPWRITE_CONFIG.databaseId;
+const CLIENTS_COLLECTION_ID = APPWRITE_CONFIG.collections.clients;
+const SERVE_ATTEMPTS_COLLECTION_ID = APPWRITE_CONFIG.collections.serveAttempts;
+const CASES_COLLECTION_ID = APPWRITE_CONFIG.collections.clientCases;
+const DOCUMENTS_COLLECTION_ID = APPWRITE_CONFIG.collections.clientDocuments;
+const STORAGE_BUCKET_ID = APPWRITE_CONFIG.storageBucket;
 
 // Helper functions for CRUD operations
 export const appwrite = {

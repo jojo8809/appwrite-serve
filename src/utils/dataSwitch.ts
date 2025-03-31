@@ -3,6 +3,7 @@ import { toast } from 'sonner';
 import { appwrite } from '@/lib/appwrite';
 import { ServeAttemptData } from '@/components/ServeAttempt';
 import { ClientData } from '@/components/ClientForm';
+import { ACTIVE_BACKEND, BACKEND_PROVIDER } from '@/config/backendConfig';
 
 export const clearLocalStorage = () => {
   try {
@@ -120,6 +121,11 @@ export const saveClientToAppwrite = async (client: ClientData): Promise<ClientDa
 };
 
 export const checkAppwriteConnection = async (): Promise<boolean> => {
+  if (ACTIVE_BACKEND !== BACKEND_PROVIDER.APPWRITE) {
+    console.log("Appwrite is not the active backend provider");
+    return false;
+  }
+  
   try {
     // Try to get a list of clients to test connection
     const clients = await appwrite.getClients();
@@ -129,4 +135,9 @@ export const checkAppwriteConnection = async (): Promise<boolean> => {
     console.error("Appwrite connection test failed:", error);
     return false;
   }
+};
+
+// Add a new function to determine which backend to use
+export const getActiveBackend = () => {
+  return ACTIVE_BACKEND;
 };

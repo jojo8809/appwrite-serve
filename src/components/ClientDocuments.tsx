@@ -45,9 +45,11 @@ import {
   deleteClientDocument,
   getClientCases,
   type UploadedDocument 
-} from "@/utils/appwriteStorage";
+} from "@/utils/supabaseStorage";
 import { toast } from "@/hooks/use-toast";
 import { useIsMobile } from "@/hooks/use-mobile";
+import { ACTIVE_BACKEND, BACKEND_PROVIDER } from '@/config/backendConfig';
+import { appwrite } from '@/lib/appwrite';
 
 interface ClientDocumentsProps {
   clientId: string;

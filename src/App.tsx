@@ -24,9 +24,11 @@ import {
 import { appwrite } from "./lib/appwrite";
 import { 
   checkAppwriteConnection, 
-  loadDataFromAppwrite, 
-  clearLocalStorage 
+  loadDataFromAppwrite,
+  clearLocalStorage,
+  getActiveBackend
 } from "./utils/dataSwitch";
+import { BACKEND_PROVIDER } from "./config/backendConfig";
 import { toast } from "@/hooks/use-toast";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
@@ -65,29 +67,37 @@ const AnimatedRoutes = () => {
   const [isInitialSync, setIsInitialSync] = useState(true);
   const [isSyncing, setIsSyncing] = useState(false);
   const [dataLoaded, setDataLoaded] = useState(false);
-  const [usingAppwrite, setUsingAppwrite] = useState(false);
+  const [usingAppwrite, setUsingAppwrite] = useState(getActiveBackend() === BACKEND_PROVIDER.APPWRITE);
   const [showAppwriteAlert, setShowAppwriteAlert] = useState(false);
 
-  // Check Appwrite connection on mount
+  // Check selected backend connection on mount
   useEffect(() => {
     const checkBackend = async () => {
-      const isAppwriteConnected = await checkAppwriteConnection();
-      setUsingAppwrite(isAppwriteConnected);
+      const activeBackend = getActiveBackend();
       
-      if (isAppwriteConnected) {
-        console.log("Using Appwrite as primary backend");
+      if (activeBackend === BACKEND_PROVIDER.APPWRITE) {
+        const isAppwriteConnected = await checkAppwriteConnection();
+        setUsingAppwrite(isAppwriteConnected);
         
-        // Set up Appwrite real-time subscription
-        const cleanup = appwrite.setupRealtimeSubscription((response) => {
-          console.log("Received real-time update from Appwrite:", response);
-          // Refresh data when changes happen
-          loadAppwriteData();
-        });
-        
-        return cleanup;
+        if (isAppwriteConnected) {
+          console.log("Using Appwrite as primary backend");
+          
+          // Set up Appwrite real-time subscription
+          const cleanup = appwrite.setupRealtimeSubscription((response) => {
+            console.log("Received real-time update from Appwrite:", response);
+            // Refresh data when changes happen
+            loadAppwriteData();
+          });
+          
+          return cleanup;
+        } else {
+          console.log("Failed to connect to Appwrite, falling back to Supabase");
+          setShowAppwriteAlert(true);
+          return setupRealtimeSubscription();
+        }
       } else {
-        console.log("Falling back to Supabase");
-        setShowAppwriteAlert(true);
+        console.log("Using Supabase as primary backend");
+        setUsingAppwrite(false);
         return setupRealtimeSubscription();
       }
     };

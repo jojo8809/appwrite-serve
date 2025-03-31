@@ -5,7 +5,7 @@ const cors = require('cors');
 const bodyParser = require('body-parser');
 
 // MongoDB Connection
-const mongoUri = process.env.MONGODB_URI; 
+const mongoUri = process.env.MONGODB_URI;
 
 // Initialize Express app
 const app = express();
@@ -18,7 +18,6 @@ app.get('/healthcheck', async (req, res) => {
     const status = mongoose.connection.readyState === 1 
       ? 'Connected to MongoDB' 
       : 'MongoDB connection not established';
-    
     res.json({ 
       status: 'ok', 
       mongoStatus: status, 
@@ -208,18 +207,15 @@ const connectDB = async () => {
         console.error('MONGODB_URI environment variable is not set');
         throw new Error('MongoDB connection string not provided');
       }
-      
       console.log('Connecting to MongoDB...');
-      // Use only safe connection options that won't cause deprecation warnings
       await mongoose.connect(mongoUri, {
-        serverSelectionTimeoutMS: 10000, // Increased timeout
+        serverSelectionTimeoutMS: 10000,
         socketTimeoutMS: 60000,
-        // Remove deprecated options
       });
       console.log('MongoDB connected successfully');
     } catch (error) {
       console.error('MongoDB connection error:', error);
-      throw error; // Let the handler catch this
+      throw error;
     }
   }
 };
@@ -227,22 +223,14 @@ const connectDB = async () => {
 // Serverless handler with better error handling
 exports.handler = async (event, context) => {
   try {
-    // Make sure to close the database connection when the function exits
     context.callbackWaitsForEmptyEventLoop = false;
-    
-    // Connect to MongoDB
     await connectDB();
-    
-    // Process the incoming request
     return serverless(app)(event, context);
   } catch (error) {
     console.error('Function error:', error);
     return {
       statusCode: 500,
-      body: JSON.stringify({ 
-        error: 'Server error', 
-        details: error.message 
-      }),
+      body: JSON.stringify({ error: 'Server error', details: error.message }),
     };
   }
 };

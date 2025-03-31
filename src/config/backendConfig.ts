@@ -4,7 +4,8 @@
 
 export const BACKEND_PROVIDER = {
   SUPABASE: 'supabase',
-  APPWRITE: 'appwrite'
+  APPWRITE: 'appwrite',
+  LOCAL: 'local' // Added local option for offline development
 };
 
 // Change this value to switch between backends
@@ -39,4 +40,14 @@ export const isAppwriteConfigured = () => {
 // Helper function to determine if Supabase is configured
 export const isSupabaseConfigured = () => {
   return !!SUPABASE_CONFIG.url && !!SUPABASE_CONFIG.anonKey;
+};
+
+// Helper function to determine if we should fall back to local storage
+export const shouldUseFallbackStorage = () => {
+  // If we're using Appwrite but have connection issues, use local storage
+  if (ACTIVE_BACKEND === BACKEND_PROVIDER.APPWRITE) {
+    // We'll check for connection errors elsewhere and use this flag
+    return window.localStorage.getItem('useLocalStorageFallback') === 'true';
+  }
+  return false;
 };

@@ -14,9 +14,23 @@ export const checkBackendConnection = async () => {
   if (isUsingAppwrite()) {
     try {
       const clients = await appwrite.getClients();
+      // If we get here, we're connected
+      // Reset any fallback flags
+      window.localStorage.removeItem('useLocalStorageFallback');
       return { connected: true, provider: 'Appwrite' };
     } catch (error) {
       console.error("Appwrite connection check failed:", error);
+      // Set fallback flag for offline usage
+      window.localStorage.setItem('useLocalStorageFallback', 'true');
+      
+      // Show toast only once - not on every failed check
+      if (!window.localStorage.getItem('connectionErrorShown')) {
+        toast.error("Appwrite connection failed", {
+          description: "Using local storage as fallback. Data will sync when connection is restored."
+        });
+        window.localStorage.setItem('connectionErrorShown', 'true');
+      }
+      
       return { connected: false, provider: 'Appwrite', error };
     }
   } else {

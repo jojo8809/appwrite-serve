@@ -1,10 +1,10 @@
 [build]
-  command = "NODE_ENV=production npm run build"
+  command = "npm run build"
   publish = "dist"
   functions = "netlify/functions"
 
 [build.environment]
-  NODE_VERSION = "18.12.1"  # Specify exact Node version
+  NODE_VERSION = "18.12.1"
   NPM_FLAGS = "--legacy-peer-deps"
 
 [dev]
@@ -13,11 +13,6 @@
   targetPort = 5173
   publish = "dist"
   framework = "vite"
-
-[[redirects]]
-  from = "/.netlify/functions/*"
-  to = "/.netlify/functions/:splat"
-  status = 200
 
 [[redirects]]
   from = "/*"

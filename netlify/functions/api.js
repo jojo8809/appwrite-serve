@@ -5,7 +5,7 @@ const cors = require('cors');
 const bodyParser = require('body-parser');
 
 // MongoDB Connection
-const mongoUri = 'mongodb://netlify_app:Crazy8809@143.198.119.28:27017/happyhelper?authSource=admin';
+const mongoUri = process.env.MONGODB_URI; // Use environment variable
 
 // Initialize Express app
 const app = express();

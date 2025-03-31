@@ -60,12 +60,21 @@ const MigrationComponent = () => {
   );
 };
 
-// Render with migration route
-createRoot(document.getElementById("root")!).render(
-  <BrowserRouter>
-    <Routes>
-      <Route path="/migration" element={<MigrationComponent />} />
-      <Route path="/*" element={<App />} />
-    </Routes>
-  </BrowserRouter>
-);
+// Create a single root element for all of the app
+const rootElement = document.getElementById("root");
+
+if (rootElement) {
+  const root = createRoot(rootElement);
+  
+  // Render with single Router instance
+  root.render(
+    <BrowserRouter>
+      <Routes>
+        <Route path="/migration" element={<MigrationComponent />} />
+        <Route path="/*" element={<App />} />
+      </Routes>
+    </BrowserRouter>
+  );
+} else {
+  console.error("Root element not found");
+}

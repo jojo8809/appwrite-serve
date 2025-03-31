@@ -1,8 +1,7 @@
-
 import React, { useState, useEffect } from "react";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { BrowserRouter, Routes, Route, useLocation, useNavigate, Navigate } from "react-router-dom";
+import { Routes, Route, useLocation, useNavigate, Navigate } from "react-router-dom";
 import { TransitionGroup, CSSTransition } from "react-transition-group";
 import NotFound from "./pages/NotFound";
 import Dashboard from "./pages/Dashboard";
@@ -510,9 +509,7 @@ const AnimatedRoutes = () => {
 const App = () => (
   <QueryClientProvider client={queryClient}>
     <TooltipProvider>
-      <BrowserRouter>
-        <AnimatedRoutes />
-      </BrowserRouter>
+      <AnimatedRoutes />
     </TooltipProvider>
   </QueryClientProvider>
 );

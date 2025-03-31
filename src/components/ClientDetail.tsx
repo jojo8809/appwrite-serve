@@ -1,4 +1,3 @@
-
 import React, { useState } from "react";
 import { 
   Card, 
@@ -41,7 +40,6 @@ export default function ClientDetail({ client, onUpdate, onBack }: ClientDetailP
 
   return (
     <div className="space-y-6 w-full">
-      {/* Back button always visible on mobile */}
       {onBack && (
         <Button 
           variant="outline" 
@@ -111,7 +109,6 @@ export default function ClientDetail({ client, onUpdate, onBack }: ClientDetailP
                   </div>
                 </div>
                 
-                {/* Display Additional Emails */}
                 {client.additionalEmails && client.additionalEmails.length > 0 && (
                   <div className="flex items-start gap-3">
                     <Mail className="h-5 w-5 text-muted-foreground mt-0.5 flex-shrink-0" />

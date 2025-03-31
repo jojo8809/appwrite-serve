@@ -1,70 +1,115 @@
-import React, { useState, useEffect } from "react";
-import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { BrowserRouter, Routes, Route } from "react-router-dom";
-import Dashboard from "./pages/Dashboard";  
-import NewServe from "./pages/NewServe";
-import DataExport from "./pages/DataExport";
-import Clients from "./pages/Clients";
-import History from "./pages/History";
-import NotFound from "./pages/NotFound";
-import Layout from "./components/Layout";
-import api from "./services/api";
-
-const queryClient = new QueryClient({
-  defaultOptions: {
-    queries: {
-      retry: 1,
-      refetchOnWindowFocus: false,
-      staleTime: 5000,
-    }
-  }
-});
+import React, { useState, useEffect } from 'react';
+import { BrowserRouter as Router, Routes, Route } from 'react-router-dom';
+import { Container } from 'react-bootstrap';
+import Header from './components/Header';
+import ClientList from './components/ClientList';
+import ClientDetails from './components/ClientDetails';
+import NewClientForm from './components/NewClientForm';
+import Dashboard from './components/Dashboard';
+import 'bootstrap/dist/css/bootstrap.min.css';
+import './App.css';
+import api from './services/api';
 
 function App() {
   const [clients, setClients] = useState([]);
-  const [serves, setServes] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null);
 
   useEffect(() => {
-    const fetchData = async () => {
-      try {
-        const response = await api.get('/clients');
-        setClients(response.data || []);
-      } catch (error) {
-        console.error("Error fetching clients:", error);
-      }
-    };
-    
-    fetchData();
+    // Fetch clients when component mounts
+    loadClients();
   }, []);
 
-  useEffect(() => {
-    const fetchServes = async () => {
-      try {
-        const response = await api.get('/serves');
-        setServes(response.data || []);
-      } catch (error) {
-        console.error("Error fetching serves:", error);
-      }
-    };
-    
-    fetchServes();
-  }, []);
+  const loadClients = async () => {
+    try {
+      setLoading(true);
+      const data = await api.getClients();
+      setClients(data);
+      setError(null);
+    } catch (err) {
+      console.error("Error loading clients:", err);
+      setError("Failed to load clients. Please try again later.");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleAddClient = async (clientData) => {
+    try {
+      const newClient = await api.createClient(clientData);
+      setClients([newClient, ...clients]);
+      return newClient;
+    } catch (err) {
+      console.error("Error adding client:", err);
+      throw new Error("Failed to add client");
+    }
+  };
+
+  const handleUpdateClient = async (id, clientData) => {
+    try {
+      const updatedClient = await api.updateClient(id, clientData);
+      setClients(clients.map(client => 
+        client._id === id ? updatedClient : client
+      ));
+      return updatedClient;
+    } catch (err) {
+      console.error("Error updating client:", err);
+      throw new Error("Failed to update client");
+    }
+  };
+
+  const handleDeleteClient = async (id) => {
+    try {
+      await api.deleteClient(id);
+      setClients(clients.filter(client => client._id !== id));
+    } catch (err) {
+      console.error("Error deleting client:", err);
+      throw new Error("Failed to delete client");
+    }
+  };
 
   return (
-    <QueryClientProvider client={queryClient}>
-      <BrowserRouter>
+    <Router>
+      <Header />
+      <Container className="mt-4">
+        {error && <div className="alert alert-danger">{error}</div>}
         <Routes>
-          <Route path="/" element={<Layout />}>
-            <Route index element={<Dashboard clients={clients} serves={serves} />} />
-            <Route path="new-serve" element={<NewServe clients={clients} serves={serves} setServes={setServes} />} />
-            <Route path="export" element={<DataExport clients={clients} serves={serves} />} />
-            <Route path="clients" element={<Clients clients={clients} setClients={setClients} />} />
-            <Route path="history" element={<History clients={clients} serves={serves} setServes={setServes} />} />
-            <Route path="*" element={<NotFound />} />
-          </Route>
+          <Route 
+            path="/" 
+            element={
+              <Dashboard 
+                clients={clients}
+                loading={loading}
+                onRefresh={loadClients}
+              />
+            } 
+          />
+          <Route 
+            path="/clients" 
+            element={
+              <ClientList 
+                clients={clients} 
+                loading={loading}
+                onDelete={handleDeleteClient}
+              />
+            } 
+          />
+          <Route 
+            path="/clients/new" 
+            element={<NewClientForm onAddClient={handleAddClient} />} 
+          />
+          <Route 
+            path="/clients/:id" 
+            element={
+              <ClientDetails 
+                onUpdateClient={handleUpdateClient}
+                onDeleteClient={handleDeleteClient}
+              />
+            } 
+          />
         </Routes>
-      </BrowserRouter>
-    </QueryClientProvider>
+      </Container>
+    </Router>
   );
 }
 

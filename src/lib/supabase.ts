@@ -1,4 +1,3 @@
-
 import { createClient } from '@supabase/supabase-js';
 
 // Get environment variables with fallbacks for the Supabase project
@@ -70,10 +69,28 @@ export const setupRealtimeSubscription = () => {
         }
       )
       .subscribe();
+      
+    // Subscribe to client_cases table changes
+    const casesChannel = supabase
+      .channel('client-cases-changes')
+      .on(
+        'postgres_changes',
+        {
+          event: '*',
+          schema: 'public',
+          table: 'client_cases'
+        },
+        (payload) => {
+          console.log('Client cases table update received:', payload);
+          window.dispatchEvent(new CustomEvent('cases-updated', { detail: payload }));
+        }
+      )
+      .subscribe();
 
     return () => {
       supabase.removeChannel(channel);
       supabase.removeChannel(clientsChannel);
+      supabase.removeChannel(casesChannel);
     };
   } catch (error) {
     console.error('Error setting up realtime subscription:', error);

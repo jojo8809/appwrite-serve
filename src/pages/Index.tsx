@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -39,7 +40,11 @@ const Index = () => {
 
   const handleSendEmail = async () => {
     if (!recipientEmail || !recipientEmail.includes('@')) {
-      console.log("Invalid email: Please enter a valid email address");
+      toast({
+        title: "Invalid email",
+        description: "Please enter a valid email address",
+        variant: "destructive"
+      });
       return;
     }
 
@@ -55,7 +60,7 @@ const Index = () => {
         bodyLength: emailBody.length
       });
       
-      // Pass the recipient email as a string, not an array
+      // Pass the recipient email - our utility will automatically add info@justlegalsolutions.org
       const result = await sendEmail({
         to: recipientEmail,
         subject: subject,
@@ -66,16 +71,28 @@ const Index = () => {
       
       if (result.success) {
         setSent(true);
-        console.log(`Email sent successfully: Email was sent to ${recipientEmail}`);
+        toast({
+          title: "Email sent successfully",
+          description: `Email was sent to ${recipientEmail} and info@justlegalsolutions.org`,
+          variant: "default"
+        });
       } else {
         setError(result.message);
-        console.log(`Failed to send email: ${result.message}`);
+        toast({
+          title: "Failed to send email",
+          description: result.message,
+          variant: "destructive"
+        });
       }
     } catch (err) {
       const errorMessage = err instanceof Error ? err.message : "Unknown error occurred";
       console.error("Error in email sending:", err);
       setError(errorMessage);
-      console.log(`Email sending error: ${errorMessage}`);
+      toast({
+        title: "Email sending error",
+        description: errorMessage,
+        variant: "destructive"
+      });
     } finally {
       setIsSending(false);
     }
@@ -120,6 +137,9 @@ const Index = () => {
               onChange={(e) => setRecipientEmail(e.target.value)}
               disabled={isSending}
             />
+            <p className="text-xs text-gray-500 mt-1">
+              The business email (info@justlegalsolutions.org) will automatically be added as a recipient.
+            </p>
           </div>
           
           <div className="space-y-2">

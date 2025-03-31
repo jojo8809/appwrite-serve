@@ -1,16 +1,25 @@
-import { defineConfig } from 'vite';
-import react from '@vitejs/plugin-react-swc';
-import path from 'path';
+import { defineConfig } from 'vite'
+import react from '@vitejs/plugin-react'
+import { resolve } from 'path'
 
+// https://vitejs.dev/config/
 export default defineConfig({
   plugins: [react()],
   resolve: {
     alias: {
-      '@': path.resolve(__dirname, './src'),
-    }
+      '@': resolve(__dirname, 'src'),
+    },
+  },
+  server: {
+    proxy: {
+      '/.netlify/functions': {
+        target: 'http://localhost:8888',
+        changeOrigin: true,
+      },
+    },
   },
   build: {
-    minify: true,
+    outDir: 'dist',
     sourcemap: true,
-  }
-});
+  },
+})

@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect } from "react";
 import { 
   Card, 
@@ -55,7 +54,7 @@ import {
   MapPin,
   ExternalLink
 } from "lucide-react";
-import { supabase } from "@/integrations/supabase/client";
+import { supabase } from "@/lib/supabase";
 import { uploadClientDocument, getClientDocuments, getDocumentUrl, deleteClientDocument, UploadedDocument } from "@/utils/supabaseStorage";
 import ClientDocuments from "@/components/ClientDocuments";
 import { useIsMobile } from "@/hooks/use-mobile";
@@ -87,7 +86,6 @@ export default function ClientCases({ clientId, clientName }: ClientCasesProps) 
   const [activeCase, setActiveCase] = useState<string | null>(null);
   const isMobile = useIsMobile();
   
-  // Form state
   const [caseNumber, setCaseNumber] = useState("");
   const [caseName, setCaseName] = useState("");
   const [description, setDescription] = useState("");
@@ -98,7 +96,6 @@ export default function ClientCases({ clientId, clientName }: ClientCasesProps) 
   const [isSaving, setIsSaving] = useState(false);
   const [selectedCase, setSelectedCase] = useState<ClientCase | null>(null);
   
-  // Upload state
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [fileDescription, setFileDescription] = useState("");
   const [uploadDialogOpen, setUploadDialogOpen] = useState(false);
@@ -111,7 +108,6 @@ export default function ClientCases({ clientId, clientName }: ClientCasesProps) 
   const [deleteDocumentPath, setDeleteDocumentPath] = useState<string | null>(null);
   const [deleteDocumentDialogOpen, setDeleteDocumentDialogOpen] = useState(false);
 
-  // Load client's cases
   useEffect(() => {
     const fetchCases = async () => {
       setIsLoading(true);
@@ -126,7 +122,6 @@ export default function ClientCases({ clientId, clientName }: ClientCasesProps) 
         
         setCases(data);
         
-        // Set the first case as active
         if (data.length > 0 && !activeCase) {
           setActiveCase(data[0].id);
         }
@@ -141,9 +136,19 @@ export default function ClientCases({ clientId, clientName }: ClientCasesProps) 
     };
     
     fetchCases();
+    
+    const handleCasesUpdated = () => {
+      console.log("Cases updated event received, refreshing cases");
+      fetchCases();
+    };
+    
+    window.addEventListener('cases-updated', handleCasesUpdated);
+    
+    return () => {
+      window.removeEventListener('cases-updated', handleCasesUpdated);
+    };
   }, [clientId, activeCase]);
 
-  // Reset form
   const resetForm = () => {
     setCaseNumber("");
     setCaseName("");
@@ -156,34 +161,35 @@ export default function ClientCases({ clientId, clientName }: ClientCasesProps) 
     setFileDescription("");
   };
 
-  // Add case
   const handleAddCase = async (e: React.FormEvent) => {
     e.preventDefault();
     
     setIsSaving(true);
     
     try {
-      // Insert case into database
+      console.log("Adding new case with client_id:", clientId);
+      
       const { data, error } = await supabase
         .from('client_cases')
         .insert({
           client_id: clientId,
           case_number: caseNumber,
-          case_name: caseName,
-          description,
-          home_address: homeAddress,
-          work_address: workAddress,
-          status
+          case_name: caseName || null,
+          description: description || null,
+          home_address: homeAddress || null,
+          work_address: workAddress || null,
+          status: status
         })
         .select()
         .single();
       
-      if (error) throw error;
+      if (error) {
+        console.error("Error details:", error);
+        throw error;
+      }
       
-      // Update local state
       setCases(prevCases => [data, ...prevCases]);
       
-      // Auto-set as active case if it's the first one
       if (cases.length === 0) {
         setActiveCase(data.id);
       }
@@ -197,14 +203,13 @@ export default function ClientCases({ clientId, clientName }: ClientCasesProps) 
     } catch (error) {
       console.error("Error adding case:", error);
       toast.error("Error adding case", {
-        description: "There was a problem adding the case."
+        description: "There was a problem adding the case. Please make sure the client exists."
       });
     } finally {
       setIsSaving(false);
     }
   };
 
-  // Edit case
   const handleUpdateCase = async (e: React.FormEvent) => {
     e.preventDefault();
     
@@ -230,7 +235,6 @@ export default function ClientCases({ clientId, clientName }: ClientCasesProps) 
       
       if (error) throw error;
       
-      // Update local state
       setCases(prevCases => 
         prevCases.map(c => c.id === selectedCase.id ? data : c)
       );
@@ -251,7 +255,6 @@ export default function ClientCases({ clientId, clientName }: ClientCasesProps) 
     }
   };
 
-  // Delete case
   const handleDeleteCase = async () => {
     if (!selectedCase) return;
     
@@ -263,10 +266,8 @@ export default function ClientCases({ clientId, clientName }: ClientCasesProps) 
       
       if (error) throw error;
       
-      // Update local state
       setCases(prevCases => prevCases.filter(c => c.id !== selectedCase.id));
       
-      // If we deleted the active case, select a new one
       if (activeCase === selectedCase.id) {
         const remainingCases = cases.filter(c => c.id !== selectedCase.id);
         setActiveCase(remainingCases.length > 0 ? remainingCases[0].id : null);
@@ -286,7 +287,6 @@ export default function ClientCases({ clientId, clientName }: ClientCasesProps) 
     }
   };
 
-  // Edit case button handler
   const handleEditCase = (clientCase: ClientCase) => {
     setSelectedCase(clientCase);
     setCaseNumber(clientCase.case_number);
@@ -298,20 +298,17 @@ export default function ClientCases({ clientId, clientName }: ClientCasesProps) 
     setEditCaseDialogOpen(true);
   };
 
-  // Delete case button handler
   const handleDeleteCaseButton = (clientCase: ClientCase) => {
     setSelectedCase(clientCase);
     setDeleteCaseDialogOpen(true);
   };
 
-  // File input change handler
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     if (e.target.files && e.target.files.length > 0) {
       setSelectedFile(e.target.files[0]);
     }
   };
 
-  // Upload document
   const handleUploadDocument = async (e: React.FormEvent) => {
     e.preventDefault();
     
@@ -332,7 +329,6 @@ export default function ClientCases({ clientId, clientName }: ClientCasesProps) 
       
       if (!document) throw new Error("Upload failed");
       
-      // Refresh documents
       const documents = await getClientDocuments(clientId);
       setDocuments(documents);
       
@@ -353,7 +349,6 @@ export default function ClientCases({ clientId, clientName }: ClientCasesProps) 
     }
   };
 
-  // View document
   const handleViewDocument = async (doc: UploadedDocument) => {
     try {
       const url = await getDocumentUrl(doc.filePath);
@@ -372,14 +367,12 @@ export default function ClientCases({ clientId, clientName }: ClientCasesProps) 
     }
   };
 
-  // Delete document button handler
   const handleDeleteDocumentButton = (id: string, filePath: string) => {
     setDeleteDocumentId(id);
     setDeleteDocumentPath(filePath);
     setDeleteDocumentDialogOpen(true);
   };
 
-  // Delete document
   const handleDeleteDocument = async () => {
     if (!deleteDocumentId || !deleteDocumentPath) return;
     
@@ -388,7 +381,6 @@ export default function ClientCases({ clientId, clientName }: ClientCasesProps) 
       
       if (!success) throw new Error("Delete failed");
       
-      // Refresh documents
       const documents = await getClientDocuments(clientId);
       setDocuments(documents);
       
@@ -407,28 +399,22 @@ export default function ClientCases({ clientId, clientName }: ClientCasesProps) 
     }
   };
 
-  // Get active case
   const getActiveCase = () => {
     return cases.find(c => c.id === activeCase);
   };
 
-  // Helper function to generate a Google Maps link from an address
   const getMapLink = (address: string) => {
     return `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(address)}`;
   };
-  
-  // Function to handle address clicks
+
   const handleAddressClick = (address: string, e: React.MouseEvent) => {
-    e.stopPropagation(); // Prevent case card click event
-    // Open in a new tab
+    e.stopPropagation();
     window.open(getMapLink(address), '_blank', 'noopener,noreferrer');
-    
     toast.success("Opening map", {
       description: "Opening address location in Google Maps"
     });
   };
 
-  // Handle upload document button click from edit case dialog
   const handleUploadFromEditDialog = () => {
     if (selectedCase) {
       setActiveCase(selectedCase.id);
@@ -478,12 +464,12 @@ export default function ClientCases({ clientId, clientName }: ClientCasesProps) 
                     </div>
                     
                     <div className="space-y-2">
-                      <Label htmlFor="case-name">Case Name/Title</Label>
+                      <Label htmlFor="case-name">To Be Served</Label>
                       <Input
                         id="case-name"
                         value={caseName}
                         onChange={(e) => setCaseName(e.target.value)}
-                        placeholder="e.g., Smith v. Jones"
+                        placeholder="e.g., John Doe"
                       />
                     </div>
                     
@@ -725,7 +711,6 @@ export default function ClientCases({ clientId, clientName }: ClientCasesProps) 
         </TabsContent>
       </Tabs>
       
-      {/* Edit Case Dialog */}
       <Dialog open={editCaseDialogOpen} onOpenChange={setEditCaseDialogOpen}>
         <DialogContent className="h-[95vh] overflow-y-auto">
           <DialogHeader>
@@ -751,12 +736,12 @@ export default function ClientCases({ clientId, clientName }: ClientCasesProps) 
               </div>
               
               <div className="space-y-2">
-                <Label htmlFor="edit-case-name">Case Name/Title</Label>
+                <Label htmlFor="edit-case-name">To Be Served</Label>
                 <Input
                   id="edit-case-name"
                   value={caseName}
                   onChange={(e) => setCaseName(e.target.value)}
-                  placeholder="e.g., Smith v. Jones"
+                  placeholder="e.g., John Doe"
                 />
               </div>
               
@@ -827,7 +812,6 @@ export default function ClientCases({ clientId, clientName }: ClientCasesProps) 
         </DialogContent>
       </Dialog>
       
-      {/* Delete Case Dialog */}
       <AlertDialog open={deleteCaseDialogOpen} onOpenChange={setDeleteCaseDialogOpen}>
         <AlertDialogContent>
           <AlertDialogHeader>
@@ -850,7 +834,6 @@ export default function ClientCases({ clientId, clientName }: ClientCasesProps) 
         </AlertDialogContent>
       </AlertDialog>
       
-      {/* View Document Dialog */}
       <Dialog open={viewDocumentDialogOpen} onOpenChange={setViewDocumentDialogOpen}>
         <DialogContent className="sm:max-w-3xl">
           <DialogHeader>
@@ -879,7 +862,6 @@ export default function ClientCases({ clientId, clientName }: ClientCasesProps) 
         </DialogContent>
       </Dialog>
       
-      {/* Delete Document Dialog */}
       <AlertDialog open={deleteDocumentDialogOpen} onOpenChange={setDeleteDocumentDialogOpen}>
         <AlertDialogContent>
           <AlertDialogHeader>

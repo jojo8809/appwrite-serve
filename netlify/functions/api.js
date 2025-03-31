@@ -5,12 +5,29 @@ const cors = require('cors');
 const bodyParser = require('body-parser');
 
 // MongoDB Connection
-const mongoUri = process.env.MONGODB_URI; // Use environment variable
+const mongoUri = process.env.MONGODB_URI; 
 
 // Initialize Express app
 const app = express();
 app.use(cors());
 app.use(bodyParser.json());
+
+// Add a health check route to verify connection
+app.get('/healthcheck', async (req, res) => {
+  try {
+    const status = mongoose.connection.readyState === 1 
+      ? 'Connected to MongoDB' 
+      : 'MongoDB connection not established';
+    
+    res.json({ 
+      status: 'ok', 
+      mongoStatus: status, 
+      connectionString: mongoUri ? 'Configured' : 'Missing'
+    });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
 
 // Define schemas
 const clientSchema = new mongoose.Schema({
@@ -183,30 +200,49 @@ app.post('/documents', async (req, res) => {
   }
 });
 
-// Connect to MongoDB
+// Connect to MongoDB with better error handling
 const connectDB = async () => {
   if (mongoose.connection.readyState === 0) {
     try {
-      await mongoose.connect(mongoUri);
-      console.log('MongoDB connected');
+      if (!mongoUri) {
+        console.error('MONGODB_URI environment variable is not set');
+        throw new Error('MongoDB connection string not provided');
+      }
+      
+      console.log('Connecting to MongoDB...');
+      // Use only safe connection options that won't cause deprecation warnings
+      await mongoose.connect(mongoUri, {
+        serverSelectionTimeoutMS: 10000, // Increased timeout
+        socketTimeoutMS: 60000,
+        // Remove deprecated options
+      });
+      console.log('MongoDB connected successfully');
     } catch (error) {
       console.error('MongoDB connection error:', error);
-      return {
-        statusCode: 500,
-        body: JSON.stringify({ error: 'Failed to connect to database' }),
-      };
+      throw error; // Let the handler catch this
     }
   }
 };
 
-// Serverless handler
+// Serverless handler with better error handling
 exports.handler = async (event, context) => {
-  // Make sure to close the database connection when the function exits
-  context.callbackWaitsForEmptyEventLoop = false;
-  
-  // Connect to MongoDB
-  await connectDB();
-  
-  // Process the incoming request
-  return serverless(app)(event, context);
+  try {
+    // Make sure to close the database connection when the function exits
+    context.callbackWaitsForEmptyEventLoop = false;
+    
+    // Connect to MongoDB
+    await connectDB();
+    
+    // Process the incoming request
+    return serverless(app)(event, context);
+  } catch (error) {
+    console.error('Function error:', error);
+    return {
+      statusCode: 500,
+      body: JSON.stringify({ 
+        error: 'Server error', 
+        details: error.message 
+      }),
+    };
+  }
 };

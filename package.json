@@ -5,8 +5,7 @@
   "scripts": {
     "dev": "vite",
     "build": "vite build",
-    "build:netlify": "vite build --config vite.netlify.config.js",
-    "lint": "eslint . --ext js,jsx --report-unused-disable-directives --max-warnings 0",
+    "lint": "eslint . --ext js,jsx,ts,tsx --report-unused-disable-directives --max-warnings 0",
     "preview": "vite preview",
     "netlify:dev": "netlify dev"
   },
@@ -22,10 +21,7 @@
     "react-dom": "^18.2.0",
     "react-icons": "^4.12.0",
     "react-router-dom": "^6.20.1",
-    "serverless-http": "^3.2.0",
-    "tailwindcss": "^3.3.5",
-    "postcss": "^8.4.31",
-    "autoprefixer": "^10.4.16"
+    "serverless-http": "^3.2.0"
   },
   "devDependencies": {
     "@types/react": "^18.2.37",

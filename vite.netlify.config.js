@@ -23,8 +23,6 @@ export default defineConfig({
     sourcemap: true,
   },
   css: {
-    postcss: {
-      plugins: [] // Empty plugins array to avoid loading tailwindcss
-    }
+    postcss: false // Disable PostCSS completely
   }
 })

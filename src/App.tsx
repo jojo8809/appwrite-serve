@@ -160,13 +160,6 @@ const AnimatedRoutes = () => {
 
   const addClient = async (client: ClientData) => {
     try {
-      // Check if client already exists
-      const { data: existingClient } = await supabase
-        .from('clients')
-        .select('id')
-        .eq('id', client.id || `client-${Date.now()}`)
-        .single();
-        
       const clientToSave = {
         id: client.id || `client-${Date.now()}`,
         name: client.name,

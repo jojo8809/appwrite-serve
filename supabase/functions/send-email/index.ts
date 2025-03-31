@@ -51,8 +51,7 @@ serve(async (req) => {
     
     const { to, subject, body, imageData, imageFormat } = requestBody;
     
-    // FIXED: Ensure we always have at least one recipient
-    if (!to || (Array.isArray(to) && to.length === 0)) {
+    if (!to) {
       console.error("Missing recipient email");
       return new Response(
         JSON.stringify({ success: false, error: "Missing recipient email" }),
@@ -60,18 +59,19 @@ serve(async (req) => {
       );
     }
     
-    // Format recipients properly - always convert to array format
-    const recipients = Array.isArray(to) ? [...to] : [to];
+    // Ensure 'to' is handled as a string, not an array
+    const recipient = typeof to === 'string' ? to : 
+                      (Array.isArray(to) && to.length > 0) ? to[0] : null;
     
-    // FIXED: Add the business email if not already in the list
-    const businessEmail = "info@justlegalsolutions.org";
-    if (!recipients.includes(businessEmail)) {
-      recipients.push(businessEmail);
-      console.log(`Added business email ${businessEmail} to recipients list`);
+    if (!recipient) {
+      console.error("Invalid recipient email format:", to);
+      return new Response(
+        JSON.stringify({ success: false, error: "Invalid recipient email format" }),
+        { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 400 }
+      );
     }
     
-    // Log all recipients to help debug
-    console.log(`Sending email to ${recipients.length} recipients:`, recipients);
+    console.log("Sending email to:", recipient);
     
     const attachments = [];
     if (imageData) {
@@ -79,10 +79,10 @@ serve(async (req) => {
       attachments.push({ filename: `image.${imageFormat}`, content: imageData, encoding: "base64" });
     }
     
-    // Create a single email with multiple recipients
+    // Use the verified domain in the from field
     const emailData = {
       from: "ServeTracker <notifications@justlegalsolutions.tech>",
-      to: recipients,
+      to: recipient, // Use a single string recipient
       subject: subject,
       html: body,
     };
@@ -98,15 +98,10 @@ serve(async (req) => {
       hasAttachments: attachments.length > 0
     });
     
-    // Send single email to all recipients
     const emailResponse = await resend.emails.send(emailData);
-    console.log("Email sent:", emailResponse);
     
-    return new Response(JSON.stringify({ 
-      success: true, 
-      message: "Email sent successfully",
-      response: emailResponse
-    }), {
+    console.log("Email sent successfully:", emailResponse);
+    return new Response(JSON.stringify({ success: true, response: emailResponse }), {
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },
       status: 200,
     });

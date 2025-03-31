@@ -22,6 +22,7 @@ const Index = () => {
   const { toast } = useToast();
 
   useEffect(() => {
+    // Check if Supabase is configured
     const configured = isSupabaseConfigured();
     setIsSupabaseReady(configured);
     
@@ -29,6 +30,7 @@ const Index = () => {
       setError("Supabase configuration is missing. Email functionality may not work.");
     }
     
+    // Log environment details for debugging
     console.log("Environment check:");
     console.log("- Supabase configured:", configured);
     console.log("- URL:", window.location.href);
@@ -37,11 +39,7 @@ const Index = () => {
 
   const handleSendEmail = async () => {
     if (!recipientEmail || !recipientEmail.includes('@')) {
-      toast({
-        title: "Invalid email",
-        description: "Please enter a valid email address",
-        variant: "destructive"
-      });
+      console.log("Invalid email: Please enter a valid email address");
       return;
     }
 
@@ -57,6 +55,7 @@ const Index = () => {
         bodyLength: emailBody.length
       });
       
+      // Pass the recipient email as a string, not an array
       const result = await sendEmail({
         to: recipientEmail,
         subject: subject,
@@ -67,28 +66,16 @@ const Index = () => {
       
       if (result.success) {
         setSent(true);
-        toast({
-          title: "Email sent successfully",
-          description: `Email was sent to ${recipientEmail} and info@justlegalsolutions.org`,
-          variant: "default"
-        });
+        console.log(`Email sent successfully: Email was sent to ${recipientEmail}`);
       } else {
         setError(result.message);
-        toast({
-          title: "Failed to send email",
-          description: result.message,
-          variant: "destructive"
-        });
+        console.log(`Failed to send email: ${result.message}`);
       }
     } catch (err) {
       const errorMessage = err instanceof Error ? err.message : "Unknown error occurred";
       console.error("Error in email sending:", err);
       setError(errorMessage);
-      toast({
-        title: "Email sending error",
-        description: errorMessage,
-        variant: "destructive"
-      });
+      console.log(`Email sending error: ${errorMessage}`);
     } finally {
       setIsSending(false);
     }
@@ -133,9 +120,6 @@ const Index = () => {
               onChange={(e) => setRecipientEmail(e.target.value)}
               disabled={isSending}
             />
-            <p className="text-xs text-gray-500 mt-1">
-              The business email (info@justlegalsolutions.org) will automatically be added as a recipient.
-            </p>
           </div>
           
           <div className="space-y-2">

@@ -2,13 +2,13 @@
   "name": "vite_react_shadcn_ts",
   "private": true,
   "version": "0.0.0",
-  "type": "module",
   "scripts": {
-    "dev": "vite",
-    "build": "vite build",
+    "dev": "react-scripts start",
+    "build": "react-scripts build",
     "build:dev": "vite build --mode development",
     "lint": "eslint .",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "start": "node server.js"
   },
   "dependencies": {
     "@hookform/resolvers": "^3.9.0",
@@ -39,7 +39,7 @@
     "@radix-ui/react-toggle": "^1.1.0",
     "@radix-ui/react-toggle-group": "^1.1.0",
     "@radix-ui/react-tooltip": "^1.1.4",
-    "@supabase/supabase-js": "^2.49.4",
+    "@supabase/supabase-js": "^2.49.2",
     "@tanstack/react-query": "^5.56.2",
     "@types/uuid": "^10.0.0",
     "class-variance-authority": "^0.7.1",
@@ -64,7 +64,15 @@
     "tailwindcss-animate": "^1.0.7",
     "uuid": "^11.1.0",
     "vaul": "^0.9.3",
-    "zod": "^3.23.8"
+    "zod": "^3.23.8",
+    "serverless-http": "^3.2.0",
+    "cors": "^2.8.5",
+    "axios": "^1.6.7",
+    "bcryptjs": "^2.4.3",
+    "express": "^4.18.2",
+    "jsonwebtoken": "^9.0.0",
+    "mongoose": "^7.5.0",
+    "dotenv": "^16.3.1"
   },
   "devDependencies": {
     "@eslint/js": "^9.9.0",

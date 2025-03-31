@@ -2,7 +2,7 @@
 import { supabase, isSupabaseConfigured } from "@/lib/supabase";
 
 interface EmailProps {
-  to: string | string[];
+  to: string;
   subject: string;
   body: string;
   imageData?: string;
@@ -13,21 +13,11 @@ interface EmailProps {
  * Sends an email using Supabase Edge Functions
  */
 export const sendEmail = async (props: EmailProps): Promise<{ success: boolean; message: string }> => {
-  let { to, subject, body, imageData, coordinates } = props;
+  const { to, subject, body, imageData, coordinates } = props;
   
-  // Convert 'to' to array format if it's a string
-  const recipients = Array.isArray(to) ? [...to] : [to];
-  
-  // Always include the business email if it's not already in the recipients list
-  const businessEmail = "info@justlegalsolutions.org";
-  if (!recipients.includes(businessEmail)) {
-    recipients.push(businessEmail);
-  }
-  
-  console.log("Sending email:", { to: recipients, subject });
+  console.log("Sending email:", { to, subject });
   console.log("Email body:", body);
   console.log("Email lengths - subject:", subject?.length, "body:", body?.length);
-  console.log(`Recipients (${recipients.length}):`, recipients);
   
   // Check if image data is present
   if (imageData) {
@@ -48,27 +38,25 @@ export const sendEmail = async (props: EmailProps): Promise<{ success: boolean; 
   try {
     console.log("Preparing to call Supabase Edge Function 'send-email'");
     
-    // Validate email format for each recipient
-    for (const email of recipients) {
-      if (!email || typeof email !== 'string' || !email.includes('@')) {
-        console.error("Invalid recipient email address", email);
-        return {
-          success: false,
-          message: `Invalid recipient email address: ${email}`
-        };
-      }
+    // Validate email format
+    if (!to || typeof to !== 'string' || !to.includes('@')) {
+      console.error("Invalid recipient email address", to);
+      return {
+        success: false,
+        message: `Invalid recipient email address: ${to}`
+      };
     }
     
     // Prepare image data for transmission
     // Remove the data URL prefix if present
     const processedImageData = imageData ? imageData.replace(/^data:image\/(png|jpeg|jpg);base64,/, '') : undefined;
     
-    console.log(`Sending email to ${recipients.length} recipients:`, recipients);
+    console.log(`Attempting to send email to: ${to}`);
     
     // Call Supabase Edge Function for sending email with detailed logging
     const { data, error } = await supabase.functions.invoke('send-email', {
       body: {
-        to: recipients, // Send to all recipients in a single request
+        to: to, // Pass as a string, not an array
         subject,
         body,
         imageData: processedImageData,
@@ -84,20 +72,20 @@ export const sendEmail = async (props: EmailProps): Promise<{ success: boolean; 
     console.log("Response from edge function:", { data, error });
 
     if (error) {
-      console.error(`Error calling send-email function:`, error);
+      console.error(`Error calling send-email function for ${to}:`, error);
       return {
         success: false,
         message: error.message || "Failed to send email"
       };
     }
 
-    console.log(`Response from send-email function:`, data);
+    console.log(`Response from send-email function for ${to}:`, data);
     return {
       success: true,
-      message: data?.message || `Email sent to ${recipients.join(", ")}`
+      message: data?.message || `Email sent to ${to}${imageData ? ' with image attachment' : ''}`
     };
   } catch (error) {
-    console.error(`Exception in email sending:`, error);
+    console.error(`Exception in email sending to ${to}:`, error);
     return {
       success: false,
       message: error instanceof Error ? error.message : "Failed to send email"

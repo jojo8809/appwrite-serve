@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect, useMemo } from "react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
@@ -108,8 +107,7 @@ const ServeAttempt: React.FC<ServeAttemptProps> = ({
       try {
         const { data, error } = await supabase
           .from('client_cases')
-          .select('case_number, case_name, home_address, work_address, client_id, clients(name), status')
-          .neq('status', 'Closed') // Filter out closed cases
+          .select('case_number, case_name, home_address, work_address, client_id, clients(name)')
           .order('created_at', { ascending: false });
         
         if (error) {
@@ -158,9 +156,8 @@ const ServeAttempt: React.FC<ServeAttemptProps> = ({
         try {
           const { data, error } = await supabase
             .from('client_cases')
-            .select('case_number, case_name, home_address, work_address, status')
+            .select('case_number, case_name, home_address, work_address')
             .eq('client_id', selectedClient.id)
-            .neq('status', 'Closed') // Filter out closed cases
             .order('created_at', { ascending: false });
           
           if (error) {
@@ -328,15 +325,8 @@ const ServeAttempt: React.FC<ServeAttemptProps> = ({
         data.caseNumber
       );
 
-      // Collect all email recipients
-      const recipients = [];
-      if (selectedClient.email) {
-        recipients.push(selectedClient.email);
-      }
-      
-      // Updated email sending to use array of recipients - our utility will add info@justlegalsolutions.org
       const emailResult = await sendEmail({
-        to: recipients,
+        to: selectedClient.email,
         subject: `Process Serve Attempt #${serveData.attemptNumber} - Case ${data.caseNumber}`,
         body: emailBody,
         imageData: capturedImage,

@@ -45,8 +45,8 @@ import {
   deleteClientDocument,
   getClientCases,
   type UploadedDocument 
-} from "@/utils/supabaseStorage";
-import { toast } from "sonner";
+} from "@/utils/appwriteStorage";
+import { toast } from "@/hooks/use-toast";
 import { useIsMobile } from "@/hooks/use-mobile";
 
 interface ClientDocumentsProps {

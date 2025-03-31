@@ -1,6 +1,6 @@
 import { appwrite } from "@/lib/appwrite";
 import { v4 as uuidv4 } from "uuid";
-import { toast } from "sonner";
+import { toast } from "@/hooks/use-toast";
 
 export interface UploadedDocument {
   id: string;
@@ -24,20 +24,23 @@ export async function uploadClientDocument(
     const result = await appwrite.uploadClientDocument(clientId, file, caseNumber, description);
     
     if (!result) {
-      toast("Error uploading document", {
+      toast({
+        title: "Error uploading document",
         description: "Document could not be uploaded. Please try again."
       });
       return null;
     }
     
-    toast("Document uploaded", {
+    toast({
+      title: "Document uploaded",
       description: "Document has been successfully uploaded."
     });
     
     return result;
   } catch (error) {
     console.error("Unexpected error uploading document:", error);
-    toast("Error uploading document", {
+    toast({
+      title: "Error uploading document",
       description: "An unexpected error occurred. Please try again."
     });
     return null;
@@ -67,11 +70,13 @@ export async function deleteClientDocument(id: string, filePath: string): Promis
     const result = await appwrite.deleteClientDocument(id, filePath);
     
     if (result) {
-      toast("Document deleted", {
+      toast({
+        title: "Document deleted",
         description: "Document has been permanently removed."
       });
     } else {
-      toast("Error deleting document", {
+      toast({
+        title: "Error deleting document",
         description: "Document could not be deleted. Please try again."
       });
     }
@@ -79,7 +84,8 @@ export async function deleteClientDocument(id: string, filePath: string): Promis
     return result;
   } catch (error) {
     console.error("Error deleting document:", error);
-    toast("Error deleting document", {
+    toast({
+      title: "Error deleting document",
       description: "An unexpected error occurred. Please try again."
     });
     return false;

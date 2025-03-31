@@ -39,6 +39,9 @@ const MigrationComponent = () => {
         <li>client_documents</li>
       </ul>
       <p style={{ marginBottom: '1rem' }}>And created a storage bucket named 'client-documents'</p>
+      <p style={{ marginBottom: '1rem' }}>
+        <strong>Note:</strong> For datetime fields without default values, the application will automatically set the current timestamp when creating records.
+      </p>
       <button 
         onClick={runMigration}
         style={{ 

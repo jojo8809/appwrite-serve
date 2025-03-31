@@ -1,4 +1,3 @@
-
 import { Client, Account, Databases, Storage, ID, Query, Teams, Functions } from 'appwrite';
 
 // Initialize Appwrite client
@@ -49,6 +48,7 @@ export const appwrite = {
   async createClient(client) {
     try {
       const clientId = client.id || ID.unique();
+      const now = new Date().toISOString();
       const response = await databases.createDocument(
         DATABASE_ID,
         CLIENTS_COLLECTION_ID,
@@ -60,7 +60,7 @@ export const appwrite = {
           phone: client.phone,
           address: client.address,
           notes: client.notes,
-          created_at: new Date().toISOString()
+          created_at: now
         }
       );
       return response;
@@ -135,6 +135,7 @@ export const appwrite = {
   async createServeAttempt(serveData) {
     try {
       const serveId = serveData.id || ID.unique();
+      const now = serveData.timestamp || new Date().toISOString();
       const response = await databases.createDocument(
         DATABASE_ID,
         SERVE_ATTEMPTS_COLLECTION_ID,
@@ -145,7 +146,7 @@ export const appwrite = {
           status: serveData.status,
           notes: serveData.notes,
           coordinates: serveData.coordinates,
-          timestamp: serveData.timestamp,
+          timestamp: now,
           image_data: serveData.imageData,
           attempt_number: serveData.attemptNumber || 1
         }

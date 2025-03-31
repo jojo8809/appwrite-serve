@@ -1,11 +1,11 @@
 // Import necessary modules
 import React from 'react';
 import { BrowserRouter as Router, Routes, Route } from 'react-router-dom';
-import { AuthProvider } from './contexts/AuthContext'; // Fixed import path
-import HomePage from './pages/HomePage';
-import LoginPage from './pages/LoginPage';
-import RegisterPage from './pages/RegisterPage';
-import TaskPage from './pages/TaskPage';
+import { AuthProvider } from './contexts/AuthContext';
+import HomePage from './components/HomePage';  // Change path to where your components actually are
+import LoginPage from './components/LoginPage';
+import RegisterPage from './components/RegisterPage';
+import TaskPage from './components/TaskPage';
 import ProtectedRoute from './components/ProtectedRoute';
 
 function App() {

@@ -285,12 +285,9 @@ export default function ClientDocuments({ clientId, clientName, caseNumber, onUp
                 <SelectValue placeholder="Select a case (optional)" />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="">No case</SelectItem>
-                {cases.map((c) => (
-                  <SelectItem key={c.caseNumber} value={c.caseNumber}>
-                    {getCaseDisplayName(c.caseNumber, c.caseName) || c.caseNumber}
-                  </SelectItem>
-                ))}
+                <SelectItem value="option1">Option 1</SelectItem>
+                <SelectItem value="option2">Option 2</SelectItem>
+                <SelectItem value="option3">Option 3</SelectItem>
               </SelectContent>
             </Select>
             <p className="text-xs text-muted-foreground">

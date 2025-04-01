@@ -81,9 +81,9 @@ export const appwrite = {
 
   async updateClient(clientId, clientData) {
     try {
-      const now = new Date().toISOString();
       console.log('Updating client with data:', clientData);
       
+      // Remove updated_at field as it's not in the schema
       const response = await databases.updateDocument(
         DATABASE_ID,
         CLIENTS_COLLECTION_ID,
@@ -94,14 +94,15 @@ export const appwrite = {
           additional_emails: clientData.additionalEmails || [],
           phone: clientData.phone || '',
           address: clientData.address || '',
-          notes: clientData.notes || '',
-          updated_at: now
+          notes: clientData.notes || ''
+          // Removed updated_at field that was causing the error
         }
       );
       console.log('Client update response:', response);
       return response;
     } catch (error) {
       console.error('Error updating client:', error);
+      console.error('Error details:', error.response || error.message);
       throw error;
     }
   },

@@ -232,14 +232,19 @@ const AnimatedRoutes = () => {
     try {
       console.log("Updating client in Appwrite:", updatedClient);
       
-      const result = await appwrite.updateClient(updatedClient.id, {
+      // Ensure we're sending the correct structure
+      const clientData = {
         name: updatedClient.name,
         email: updatedClient.email,
         additionalEmails: updatedClient.additionalEmails || [],
         phone: updatedClient.phone,
         address: updatedClient.address,
         notes: updatedClient.notes || "",
-      });
+      };
+      
+      console.log("Prepared client data:", clientData);
+      
+      const result = await appwrite.updateClient(updatedClient.id, clientData);
       
       if (result) {
         toast({
@@ -248,9 +253,22 @@ const AnimatedRoutes = () => {
           variant: "success",
         });
         
-        setClients(prev => prev.map(client => 
-          client.id === updatedClient.id ? updatedClient : client
-        ));
+        // Make sure we map the data correctly to account for field name differences
+        const updatedClientWithSchema = {
+          id: result.$id,
+          name: result.name,
+          email: result.email,
+          additionalEmails: result.additional_emails || [],
+          phone: result.phone,
+          address: result.address,
+          notes: result.notes || "",
+        };
+        
+        setClients((prev) =>
+          prev.map((client) =>
+            client.id === updatedClient.id ? updatedClientWithSchema : client
+          )
+        );
         
         setTimeout(() => {
           loadAppwriteData();
@@ -258,8 +276,11 @@ const AnimatedRoutes = () => {
         
         return true;
       }
+      return false;
     } catch (error) {
       console.error("Error updating client in Appwrite:", error);
+      console.error("Error details:", error.response || error.message);
+      
       toast({
         title: "Error updating client",
         description: error instanceof Error ? error.message : "Unknown error",

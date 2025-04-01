@@ -56,6 +56,40 @@ export const initializeDebugTools = () => {
           console.error('Error deleting client:', error);
           return null;
         }
+      },
+      update: async (clientId, clientData = {}) => {
+        try {
+          console.log(`Updating client ${clientId}...`);
+          
+          // Get current client data
+          const client = await appwrite.databases.getDocument(
+            APPWRITE_CONFIG.databaseId,
+            APPWRITE_CONFIG.collections.clients,
+            clientId
+          );
+          
+          console.log('Current client data:', client);
+          
+          // Prepare update data with defaults from current client
+          const updateData = {
+            name: clientData.name || client.name,
+            email: clientData.email || client.email,
+            additionalEmails: clientData.additionalEmails || client.additional_emails || [],
+            phone: clientData.phone || client.phone,
+            address: clientData.address || client.address,
+            notes: clientData.notes || client.notes || "",
+          };
+          
+          console.log('Update data being sent:', updateData);
+          
+          const result = await appwrite.updateClient(clientId, updateData);
+          console.log('Client update result:', result);
+          return result;
+        } catch (error) {
+          console.error('Error updating client:', error);
+          console.error('Error details:', error.response || error.message);
+          return null;
+        }
       }
     },
     
@@ -164,6 +198,7 @@ export const initializeDebugTools = () => {
       console.log('- appwriteDebug.clients.list() - List all clients');
       console.log('- appwriteDebug.clients.create("Name") - Create a test client');
       console.log('- appwriteDebug.clients.delete("clientId") - Delete a client');
+      console.log('- appwriteDebug.clients.update("clientId", { clientData }) - Update a client');
       console.log('- appwriteDebug.cases.list("clientId") - List cases for a client');
       console.log('- appwriteDebug.cases.create("clientId") - Create a test case');
       console.log('- appwriteDebug.cases.update("caseId", { caseData }) - Update a test case');

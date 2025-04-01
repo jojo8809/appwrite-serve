@@ -215,30 +215,16 @@ export const appwrite = {
 
   async createServeAttempt(serveData) {
     try {
-      const serveId = serveData.id || ID.unique();
-      const now = new Date().toISOString();
+      console.log("Creating serve attempt with data:", serveData);
 
-      console.log("Creating serve attempt with data:", {
-        ...serveData,
-        timestamp: serveData.timestamp ? serveData.timestamp.toISOString() : now,
-      });
-
-      const response = await databases.createDocument(
-        DATABASE_ID,
-        SERVE_ATTEMPTS_COLLECTION_ID,
-        serveId,
-        {
-          client_id: serveData.clientId,
-          case_number: serveData.caseNumber || "",
-          address: serveData.address,
-          notes: serveData.notes,
-          status: serveData.status || "attempted",
-          image_data: serveData.imageData || null,
-          coordinates: serveData.coordinates || null,
-          timestamp: serveData.timestamp ? serveData.timestamp.toISOString() : now, // Use timestamp instead of date/time
-          created_at: now,
-        }
+      const response = await this.databases.createDocument(
+        this.DATABASE_ID,
+        this.SERVE_ATTEMPTS_COLLECTION_ID,
+        "unique()", // Auto-generate document ID
+        serveData
       );
+
+      console.log("Serve attempt created successfully:", response);
       return response;
     } catch (error) {
       console.error("Error creating serve attempt:", error);

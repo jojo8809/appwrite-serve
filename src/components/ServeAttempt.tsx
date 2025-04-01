@@ -287,7 +287,7 @@ const ServeAttempt: React.FC<ServeAttemptProps> = ({
 
   const handleSubmit = async (data: ServeFormValues) => {
     if (!capturedImage || !location || !selectedClient) {
-      console.log("Error", "Missing required information. Please try again.");
+      console.error("Missing required information. Please try again.");
       return;
     }
 
@@ -295,7 +295,7 @@ const ServeAttempt: React.FC<ServeAttemptProps> = ({
 
     try {
       const imageWithGPS = embedGpsIntoImage(capturedImage, location);
-      
+
       const serveData: ServeAttemptData = {
         clientId: data.clientId,
         caseNumber: data.caseNumber,
@@ -307,6 +307,13 @@ const ServeAttempt: React.FC<ServeAttemptProps> = ({
         attemptNumber: caseAttemptCount + 1,
       };
 
+      console.log("Submitting serve attempt:", serveData);
+
+      // Save serve attempt to Appwrite
+      const savedServe = await appwrite.createServeAttempt(serveData);
+      console.log("Serve attempt saved:", savedServe);
+
+      // Send email notification
       const emailBody = createServeEmailBody(
         selectedClient.name,
         selectedClient.address,
@@ -317,25 +324,19 @@ const ServeAttempt: React.FC<ServeAttemptProps> = ({
         data.caseNumber
       );
 
-      // Collect all email recipients
-      const recipients = [];
-      if (selectedClient.email) {
-        recipients.push(selectedClient.email);
-      }
-      
-      // Send email with just the necessary data
       const emailResult = await sendEmail({
-        to: recipients,
+        to: selectedClient.email,
         subject: `Process Serve Attempt #${serveData.attemptNumber} - Case ${data.caseNumber}`,
-        body: emailBody
+        body: emailBody,
       });
 
       if (emailResult.success) {
-        console.log("Email sent", `Notification sent to ${selectedClient.name}`);
+        console.log("Email sent successfully.");
+      } else {
+        console.error("Failed to send email:", emailResult.message);
       }
 
       onComplete(serveData);
-            
       form.reset();
       setCapturedImage(null);
       setLocation(null);
@@ -344,7 +345,6 @@ const ServeAttempt: React.FC<ServeAttemptProps> = ({
       setStep("select");
     } catch (error) {
       console.error("Error submitting serve attempt:", error);
-      console.log("Error", "Failed to complete the serve attempt. Please try again.");
     } finally {
       setIsSending(false);
     }

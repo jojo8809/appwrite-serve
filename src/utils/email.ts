@@ -13,96 +13,45 @@ export const sendEmail = async (props: EmailProps): Promise<{ success: boolean; 
   const { to, subject, body } = props;
 
   try {
-    // Convert 'to' to array if it's a string
     const recipients = Array.isArray(to) ? [...to] : [to];
-    
-    // Add the business email if not already included
     const businessEmail = "info@justlegalsolutions.org";
     if (!recipients.includes(businessEmail)) {
       recipients.push(businessEmail);
-      console.log(`Added business email ${businessEmail} to recipients`);
     }
 
-    // Function ID from your Appwrite dashboard
-    const functionId = '67ec44660011c13116cd'; // Corrected function ID
-    console.log(`Using function ID: ${functionId}`);
-
-    // Create the payload
+    const functionId = '67ec44660011c13116cd';
     const payload = { 
       to: recipients, 
       subject, 
       body,
-      apiKey: "re_cKhSe1Ao_7Wyvkcfq6AjC8Ccorq4GeoQA" // Include API key in payload
+      apiKey: "re_cKhSe1Ao_7Wyvkcfq6AjC8Ccorq4GeoQA"
     };
-    
-    console.log("Sending execution with payload:", JSON.stringify(payload, null, 2));
 
-    // Execute the function
+    console.log("Sending email with payload:", payload);
+
     const response = await appwrite.functions.createExecution(
       functionId,
       JSON.stringify(payload)
     );
 
-    console.log("Raw Appwrite response:", JSON.stringify(response, null, 2));
+    console.log("Appwrite function response:", response);
 
-    // Check if response exists
-    if (!response) {
-      console.error("Empty response from Appwrite function");
-      return { success: false, message: "Empty response from email function." };
+    if (!response || response.response === undefined) {
+      console.error("Empty or invalid response from Appwrite function:", response);
+      return { success: false, message: "Empty or invalid response from email function." };
     }
 
-    // Check if response has the expected structure
-    if (typeof response !== 'object' || response.response === undefined) {
-      console.error("Invalid response format from Appwrite function:", response);
-      
-      // If the execution was created but there's no proper response, check the status
-      if (response.status) {
-        console.log("Function execution status:", response.status);
-        return { 
-          success: false, 
-          message: `Email function executed with status: ${response.status}. Check Appwrite logs for details.` 
-        };
-      }
-      
-      return { success: false, message: "Invalid response format from email function." };
-    }
-
-    // Try to parse the response, handle invalid JSON
-    let result;
-    try {
-      result = JSON.parse(response.response);
-      console.log("Parsed response:", result);
-    } catch (parseError) {
-      console.error("Failed to parse function response:", response.response);
-      
-      // If we can't parse but have a string response, return it as the message
-      if (typeof response.response === 'string') {
-        return { 
-          success: false, 
-          message: `Invalid response format: ${response.response.substring(0, 100)}...` 
-        };
-      }
-      
-      return { success: false, message: "Invalid response format from email function." };
-    }
-
-    // Handle the parsed result
-    if (result && result.success) {
+    const result = JSON.parse(response.response);
+    if (result.success) {
       console.log("Email sent successfully:", result.message);
-      return { success: true, message: result.message || "Email sent successfully" };
-    } else if (result) {
-      console.error("Function returned error:", result.message || "Unknown error");
-      return { success: false, message: result.message || "Function returned an error" };
+      return { success: true, message: result.message };
     } else {
-      console.error("Unknown function response format");
-      return { success: false, message: "Unknown function response format" };
+      console.error("Failed to send email:", result.message);
+      return { success: false, message: result.message };
     }
   } catch (error) {
     console.error("Error calling resend-email function:", error);
-    return { 
-      success: false, 
-      message: error instanceof Error ? `Failed to send email: ${error.message}` : "Failed to send email." 
-    };
+    return { success: false, message: "Failed to send email." };
   }
 };
 

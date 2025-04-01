@@ -102,7 +102,6 @@ export const appwrite = {
       return response;
     } catch (error) {
       console.error('Error updating client:', error);
-      console.error('Error details:', error.response);
       throw error;
     }
   },
@@ -162,7 +161,6 @@ export const appwrite = {
       return true;
     } catch (error) {
       console.error('Error in client deletion process:', error);
-      console.error('Error details:', error.response || error.message);
       throw error;
     }
   },
@@ -201,13 +199,14 @@ export const appwrite = {
         SERVE_ATTEMPTS_COLLECTION_ID,
         serveId,
         {
-          clientId: serveData.clientId,
+          client_id: serveData.clientId,
+          case_number: serveData.caseNumber || "",
           date: serveData.date,
           time: serveData.time,
           address: serveData.address,
           notes: serveData.notes,
           status: serveData.status || 'attempted',
-          imageData: serveData.imageData || null,
+          image_data: serveData.imageData || null,
           coordinates: serveData.coordinates || null,
           created_at: now,
         }
@@ -226,14 +225,14 @@ export const appwrite = {
         SERVE_ATTEMPTS_COLLECTION_ID,
         serveId,
         {
-          clientId: serveData.clientId,
-          caseNumber: serveData.caseNumber || "",
+          client_id: serveData.clientId,
+          case_number: serveData.caseNumber || "",
           date: serveData.date,
           time: serveData.time,
           address: serveData.address,
           notes: serveData.notes,
           status: serveData.status,
-          imageData: serveData.imageData || null,
+          image_data: serveData.imageData || null,
           coordinates: serveData.coordinates || null,
           updated_at: new Date().toISOString()
         }
@@ -262,27 +261,22 @@ export const appwrite = {
   // Case operations
   async getClientCases(clientId) {
     try {
-      console.log('Fetching cases for client:', clientId);
       const response = await databases.listDocuments(
         DATABASE_ID,
         CASES_COLLECTION_ID,
         [Query.equal('client_id', clientId)]
       );
-      console.log('Case fetch response:', response);
       return response.documents;
     } catch (error) {
       console.error(`Error fetching cases for client ${clientId}:`, error);
-      console.error('Error details:', error.response || error.message);
       return [];
     }
   },
 
   async createClientCase(caseData) {
     try {
-      console.log('Creating case with data:', caseData);
       const caseId = ID.unique();
       const now = new Date().toISOString();
-      
       const response = await databases.createDocument(
         DATABASE_ID,
         CASES_COLLECTION_ID,
@@ -299,11 +293,9 @@ export const appwrite = {
           updated_at: now
         }
       );
-      console.log('Case creation response:', response);
       return response;
     } catch (error) {
       console.error('Error creating case:', error);
-      console.error('Error details:', error.response);
       throw error;
     }
   },
@@ -315,12 +307,11 @@ export const appwrite = {
         CASES_COLLECTION_ID,
         caseId,
         {
-          caseNumber: caseData.caseNumber,
-          caseName: caseData.caseName || "",
-          courtName: caseData.courtName || "",
+          case_number: caseData.caseNumber,
+          case_name: caseData.caseName || "",
           description: caseData.description || "",
-          homeAddress: caseData.homeAddress || "",
-          workAddress: caseData.workAddress || "",
+          home_address: caseData.homeAddress || "",
+          work_address: caseData.workAddress || "",
           status: caseData.status,
           updated_at: new Date().toISOString()
         }
@@ -365,106 +356,17 @@ export const appwrite = {
   },
 
   // Storage operations
-  async uploadFile(file, path) {
-    try {
-      const fileId = ID.unique();
-      const response = await storage.createFile(
-        STORAGE_BUCKET_ID,
-        fileId,
-        file
-      );
-      
-      console.log("File uploaded successfully:", response);
-      
-      return {
-        id: fileId,
-        path: path || fileId,
-        size: file.size,
-        mimeType: file.type
-      };
-    } catch (error) {
-      console.error('Error uploading file:', error);
-      throw error;
-    }
-  },
-
-  async getFilePreview(fileId) {
-    try {
-      const previewUrl = storage.getFilePreview(
-        STORAGE_BUCKET_ID,
-        fileId
-      );
-      return previewUrl;
-    } catch (error) {
-      console.error('Error getting file preview:', error);
-      throw error;
-    }
-  },
-
-  async getFileView(fileId) {
-    try {
-      const viewUrl = storage.getFileView(
-        STORAGE_BUCKET_ID,
-        fileId
-      );
-      return viewUrl;
-    } catch (error) {
-      console.error('Error getting file view:', error);
-      throw error;
-    }
-  },
-
-  async deleteFile(fileId) {
-    try {
-      await storage.deleteFile(
-        STORAGE_BUCKET_ID,
-        fileId
-      );
-      return true;
-    } catch (error) {
-      console.error('Error deleting file:', error);
-      throw error;
-    }
-  },
-
-  // Document operations
-  async getClientDocuments(clientId, caseNumber) {
-    try {
-      let queries = [Query.equal('client_id', clientId)];
-      
-      if (caseNumber) {
-        queries.push(Query.equal('case_number', caseNumber));
-      }
-      
-      const response = await databases.listDocuments(
-        DATABASE_ID,
-        DOCUMENTS_COLLECTION_ID,
-        queries
-      );
-      
-      return response.documents;
-    } catch (error) {
-      console.error(`Error fetching documents for client ${clientId}:`, error);
-      throw error;
-    }
-  },
-
   async uploadClientDocument(clientId, file, caseNumber, description) {
     try {
-      // First upload the file to storage
       const fileId = ID.unique();
       const fileUploadResponse = await storage.createFile(
         STORAGE_BUCKET_ID,
         fileId,
         file
       );
-      
-      console.log("File uploaded to storage:", fileUploadResponse);
-      
-      // Then create a document record
+
       const docId = ID.unique();
       const now = new Date().toISOString();
-      
       const document = await databases.createDocument(
         DATABASE_ID,
         DOCUMENTS_COLLECTION_ID,
@@ -480,8 +382,6 @@ export const appwrite = {
           created_at: now
         }
       );
-      
-      console.log("Document record created:", document);
       return document;
     } catch (error) {
       console.error('Error uploading client document:', error);
@@ -489,64 +389,38 @@ export const appwrite = {
     }
   },
 
-  async getDocumentUrl(fileId) {
+  async getClientDocuments(clientId, caseNumber) {
     try {
-      const fileUrl = storage.getFileView(
-        STORAGE_BUCKET_ID,
-        fileId
+      const queries = [Query.equal('client_id', clientId)];
+      if (caseNumber) {
+        queries.push(Query.equal('case_number', caseNumber));
+      }
+      const response = await databases.listDocuments(
+        DATABASE_ID,
+        DOCUMENTS_COLLECTION_ID,
+        queries
       );
-      return fileUrl;
+      return response.documents;
     } catch (error) {
-      console.error('Error getting document URL:', error);
+      console.error(`Error fetching documents for client ${clientId}:`, error);
       throw error;
     }
   },
 
   async deleteClientDocument(docId, fileId) {
     try {
-      // First delete the document record
       await databases.deleteDocument(
         DATABASE_ID,
         DOCUMENTS_COLLECTION_ID,
         docId
       );
-      
-      // Then delete the actual file
       if (fileId) {
-        await storage.deleteFile(
-          STORAGE_BUCKET_ID,
-          fileId
-        );
+        await storage.deleteFile(STORAGE_BUCKET_ID, fileId);
       }
-      
       return true;
     } catch (error) {
       console.error('Error deleting client document:', error);
       throw error;
-    }
-  },
-
-  // Real-time subscriptions
-  setupRealtimeSubscription(callback) {
-    try {
-      console.log("Setting up real-time subscription for collections");
-      
-      const unsubscribe = client.subscribe([
-        `databases.${DATABASE_ID}.collections.${CLIENTS_COLLECTION_ID}.documents`,
-        `databases.${DATABASE_ID}.collections.${SERVE_ATTEMPTS_COLLECTION_ID}.documents`,
-        `databases.${DATABASE_ID}.collections.${CASES_COLLECTION_ID}.documents`,
-        `databases.${DATABASE_ID}.collections.${DOCUMENTS_COLLECTION_ID}.documents`,
-      ], response => {
-        console.log("Received real-time update:", response);
-        callback(response);
-      });
-      
-      return () => {
-        unsubscribe();
-      };
-    } catch (error) {
-      console.error("Error setting up real-time subscription:", error);
-      return () => {}; // Return empty function if subscription fails
     }
   }
 };

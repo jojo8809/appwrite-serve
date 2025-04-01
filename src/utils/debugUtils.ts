@@ -91,6 +91,29 @@ export const initializeDebugTools = () => {
           console.error('Error creating case:', error);
           return null;
         }
+      },
+      update: async (caseId, caseData = {}) => {
+        try {
+          console.log(`Updating case ${caseId}...`);
+          const defaultData = {
+            caseNumber: `UPDATED-${Date.now()}`,
+            caseName: 'Updated Test Case',
+            description: 'Updated via debug tool',
+            status: 'Pending',
+            homeAddress: '123 Updated Home St',
+            workAddress: '456 Updated Work Ave'
+          };
+          
+          const updateData = { ...defaultData, ...caseData };
+          console.log('Update data:', updateData);
+          
+          const result = await appwrite.updateClientCase(caseId, updateData);
+          console.log('Case update result:', result);
+          return result;
+        } catch (error) {
+          console.error('Error updating case:', error);
+          return null;
+        }
       }
     },
     
@@ -110,6 +133,27 @@ export const initializeDebugTools = () => {
           console.error('Error listing documents:', error);
           return null;
         }
+      },
+      upload: async (clientId, caseNumber = '') => {
+        try {
+          // Create a simple text file
+          const content = `Test file created at ${new Date().toISOString()}`;
+          const blob = new Blob([content], { type: 'text/plain' });
+          const file = new File([blob], `test-${Date.now()}.txt`, { type: 'text/plain' });
+          
+          console.log(`Uploading document for client ${clientId}...`);
+          const result = await appwrite.uploadClientDocument(
+            clientId, 
+            file, 
+            caseNumber, 
+            'Uploaded via debug tool'
+          );
+          console.log('Document upload result:', result);
+          return result;
+        } catch (error) {
+          console.error('Error uploading document:', error);
+          return null;
+        }
       }
     },
     
@@ -122,7 +166,9 @@ export const initializeDebugTools = () => {
       console.log('- appwriteDebug.clients.delete("clientId") - Delete a client');
       console.log('- appwriteDebug.cases.list("clientId") - List cases for a client');
       console.log('- appwriteDebug.cases.create("clientId") - Create a test case');
+      console.log('- appwriteDebug.cases.update("caseId", { caseData }) - Update a test case');
       console.log('- appwriteDebug.raw.listDocuments("collectionId") - List raw documents');
+      console.log('- appwriteDebug.raw.upload("clientId", "caseNumber") - Upload a document');
     }
   };
   

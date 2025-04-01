@@ -204,12 +204,12 @@ export default function ClientCases({ clientId, clientName }: ClientCasesProps) 
     
     try {
       const updatedCase = await appwrite.updateClientCase(selectedCase.$id, {
-        caseNumber,
-        caseName,
-        description,
-        status,
-        homeAddress,
-        workAddress
+        caseNumber: caseNumber,
+        caseName: caseName || "",
+        description: description || "",
+        status: status,
+        homeAddress: homeAddress || "",
+        workAddress: workAddress || ""
       });
       
       setCases(prevCases => 

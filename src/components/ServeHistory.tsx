@@ -1,304 +1,209 @@
-import React, { useState } from 'react';
-import { ServeAttemptData } from './ServeAttempt';
-import { ClientData } from './ClientForm';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import React, { useState } from "react";
+import { formatDistanceToNow } from "date-fns";
+import { Card, CardContent } from "@/components/ui/card";
+import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Clock, MapPin, Edit2, Trash2, Plus, FileCheck, MapPinOff } from 'lucide-react';
-import { deleteServeAttempt } from '@/lib/supabase';
-import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
-import { toast } from 'sonner';
-import { formatCoordinates, getGoogleMapsUrl, isGeolocationCoordinates, safeFormatCoordinates, safeGetGoogleMapsUrl } from '@/utils/gps';
+import { ServeAttemptData } from "./ServeAttempt";
+import { ClientData } from "./ClientForm";
+// Replace Supabase import with Appwrite
+import { appwrite } from "@/lib/appwrite";
+import { 
+  MapPin, 
+  Edit2, 
+  Trash2, 
+  CheckCircle, 
+  AlertCircle,
+  User,
+  CalendarClock,
+  FileText
+} from "lucide-react";
+import { 
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogTrigger,
+} from "@/components/ui/alert-dialog";
+import { ScrollArea } from "@/components/ui/scroll-area";
+import { useToast } from "@/hooks/use-toast";
 
 interface ServeHistoryProps {
   serves: ServeAttemptData[];
   clients: ClientData[];
-  onNewAttempt?: (clientId: string, caseNumber: string, previousAttempts: number) => void;
-  onDelete?: (serveId: string) => Promise<boolean>;
   onEdit?: (serve: ServeAttemptData) => void;
+  onDelete?: (id: string) => void;
 }
 
-const ServeHistory: React.FC<ServeHistoryProps> = ({ 
-  serves, 
-  clients, 
-  onNewAttempt, 
-  onDelete,
-  onEdit
-}) => {
-  const [deletingServeId, setDeletingServeId] = useState<string | null>(null);
-  const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
+export default function ServeHistory({ serves, clients, onEdit, onDelete }: ServeHistoryProps) {
+  const [deleteId, setDeleteId] = useState<string | null>(null);
   const [isDeleting, setIsDeleting] = useState(false);
-
-  const groupedServes = serves.reduce((acc, serve) => {
-    const client = clients.find(c => c.id === serve.clientId);
-    if (!client) return acc;
-    
-    const clientName = client.name;
-    if (!acc[clientName]) {
-      acc[clientName] = {};
-    }
-    
-    const caseNumber = serve.caseNumber || 'No Case Number';
-    if (!acc[clientName][caseNumber]) {
-      acc[clientName][caseNumber] = [];
-    }
-    
-    acc[clientName][caseNumber].push({
-      ...serve,
-      clientName: client.name,
-      clientAddress: client.address
-    });
-    
-    return acc;
-  }, {} as Record<string, Record<string, (ServeAttemptData & { clientName: string; clientAddress: string })[]>>);
+  const { toast } = useToast();
   
-  console.log("ServeHistory component received serves:", serves.length);
-  console.log("Grouped serves structure:", Object.keys(groupedServes).length, "clients,", 
-    Object.values(groupedServes).reduce((sum, cases) => sum + Object.keys(cases).length, 0), "cases");
+  const getClientName = (clientId: string) => {
+    const client = clients.find(c => c.id === clientId);
+    return client?.name || "Unknown Client";
+  };
   
-  const handleDeleteServe = async (serveId: string) => {
-    setIsDeleting(true);
-    
+  const formatDate = (date: Date) => {
     try {
-      console.log(`Deleting serve attempt with ID: ${serveId}`);
+      return formatDistanceToNow(new Date(date), { addSuffix: true });
+    } catch (error) {
+      console.error("Date formatting error:", error, date);
+      return "Unknown date";
+    }
+  };
+  
+  const handleDeleteConfirm = async () => {
+    if (!deleteId) return;
+    
+    setIsDeleting(true);
+    try {
+      // Use Appwrite instead of supabase
+      await appwrite.deleteServeAttempt(deleteId);
       
-      const result = await deleteServeAttempt(serveId);
+      toast({
+        title: "Serve attempt deleted",
+        description: "The serve attempt has been permanently removed",
+        variant: "default"
+      });
       
-      if (!result.success) {
-        console.error("Error deleting serve attempt:", result.error);
-        toast.error("Failed to delete record", {
-          description: result.error || "Please try again"
-        });
-      } else {
-        console.log("Successfully deleted from Supabase");
-        toast.success("Record deleted successfully");
-        
-        if (onDelete) {
-          await onDelete(serveId);
-        }
+      // Call onDelete if provided
+      if (onDelete) {
+        onDelete(deleteId);
       }
       
-      setIsDeleteDialogOpen(false);
-      setDeletingServeId(null);
+      setDeleteId(null);
     } catch (error) {
-      console.error("Unexpected error deleting serve attempt:", error);
-      toast.error("An unexpected error occurred");
+      console.error("Error deleting serve attempt:", error);
+      toast({
+        title: "Error deleting serve attempt",
+        description: "An error occurred while deleting the serve attempt",
+        variant: "destructive"
+      });
     } finally {
       setIsDeleting(false);
     }
   };
-  
-  const handleNewAttempt = (clientId: string, caseNumber: string, previousAttempts: number) => {
-    if (onNewAttempt) {
-      onNewAttempt(clientId, caseNumber, previousAttempts);
-    }
+
+  const handleDelete = (serveId: string) => {
+    setDeleteId(serveId);
   };
   
-  const sortedClients = Object.keys(groupedServes).sort();
-  
+  if (!serves || serves.length === 0) {
+    return (
+      <div className="text-center py-10">
+        <p className="text-muted-foreground">No serve history found.</p>
+      </div>
+    );
+  }
+
   return (
-    <div className="space-y-8">
-      {sortedClients.map(clientName => (
-        <div key={clientName} className="space-y-4">
-          <h3 className="text-xl font-semibold">{clientName}</h3>
-          
-          {Object.entries(groupedServes[clientName]).map(([caseNumber, caseServes]) => {
-            const sortedServes = [...caseServes].sort((a, b) => 
-              new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime()
-            );
-            
-            const client = clients.find(c => c.name === clientName);
-            const clientId = client?.id || "";
-            
-            return (
-              <Card key={caseNumber} className="overflow-hidden">
-                <CardHeader className="border-b bg-muted/50 pb-2">
-                  <div className="flex items-center justify-between">
-                    <div>
-                      <CardTitle className="text-base">Case #{caseNumber}</CardTitle>
-                      <CardDescription>
-                        {sortedServes.length} {sortedServes.length === 1 ? 'attempt' : 'attempts'}
-                      </CardDescription>
-                    </div>
-                    
-                    {onNewAttempt && (
-                      <Button 
-                        variant="outline" 
-                        size="sm" 
-                        onClick={() => handleNewAttempt(clientId, caseNumber, sortedServes.length)}
-                      >
-                        <Plus className="h-4 w-4 mr-1" />
-                        New Attempt
-                      </Button>
+    <div className="space-y-3">
+      {serves.map((serve) => (
+        <Card key={serve.id} className="neo-card overflow-hidden animate-scale-in">
+          <CardContent className="p-4">
+            <div className="flex flex-col sm:flex-row justify-between">
+              <div className="space-y-2">
+                <div className="flex items-center space-x-2">
+                  <User className="h-4 w-4 text-muted-foreground" />
+                  <span className="font-medium">{getClientName(serve.clientId)}</span>
+                  <Badge variant={serve.status === "completed" ? "success" : "warning"}>
+                    {serve.status === "completed" ? (
+                      <><CheckCircle className="h-3 w-3 mr-1" /> Served</>
+                    ) : (
+                      <><AlertCircle className="h-3 w-3 mr-1" /> Failed Attempt</>
+                    )}
+                  </Badge>
+                </div>
+                
+                {serve.caseNumber && (
+                  <div className="flex items-center space-x-2 text-sm text-muted-foreground">
+                    <FileText className="h-3.5 w-3.5" />
+                    <span>Case #{serve.caseNumber}</span>
+                    {serve.attemptNumber && (
+                      <span className="text-xs bg-accent px-1.5 py-0.5 rounded">
+                        Attempt #{serve.attemptNumber}
+                      </span>
                     )}
                   </div>
-                </CardHeader>
+                )}
                 
-                <CardContent className="p-0">
-                  {sortedServes.map((serve, index) => {
-                    const date = new Date(serve.timestamp);
-                    
-                    const hasCoordinates = isGeolocationCoordinates(serve.coordinates);
-                    console.log(`Serve #${index} coordinates:`, serve.coordinates, "Has coordinates:", hasCoordinates);
-                    
-                    let googleMapsUrl = '#';
-                    let formattedCoords = 'No location data';
-                    
-                    if (hasCoordinates) {
-                      try {
-                        googleMapsUrl = safeGetGoogleMapsUrl(serve.coordinates);
-                        formattedCoords = safeFormatCoordinates(serve.coordinates);
-                        console.log("Formatted coordinates:", formattedCoords);
-                        console.log("Google Maps URL:", googleMapsUrl);
-                      } catch (error) {
-                        console.error("Error formatting coordinates:", error);
-                      }
-                    }
-                    
-                    const statusClass = serve.status === "completed" ? 
-                      "bg-green-100 text-green-800" : 
-                      "bg-amber-100 text-amber-800";
-                    
-                    return (
-                      <div key={serve.id} className={`p-3 sm:p-4 ${index !== sortedServes.length - 1 ? 'border-b' : ''}`}>
-                        <div className="flex flex-col sm:flex-row sm:items-center justify-between mb-2">
-                          <div className="flex items-center gap-2 mb-2 sm:mb-0">
-                            <span className={`text-xs px-2 py-1 rounded-full font-medium ${statusClass}`}>
-                              {serve.status === "completed" ? "Served" : "Failed"}
-                            </span>
-                            <span className="text-xs text-muted-foreground">
-                              Attempt #{serve.attemptNumber || 1}
-                            </span>
-                          </div>
-                          
-                          <div className="flex items-center gap-2">
-                            {onEdit && (
-                              <Button 
-                                variant="ghost" 
-                                size="sm" 
-                                className="h-8 w-8 p-0"
-                                title="Edit attempt"
-                                onClick={() => onEdit(serve)}
-                              >
-                                <Edit2 className="h-4 w-4 text-primary" />
-                              </Button>
-                            )}
-                            <Button 
-                              variant="ghost" 
-                              size="sm" 
-                              className="h-8 w-8 p-0"
-                              title="Delete attempt"
-                              onClick={() => {
-                                setDeletingServeId(serve.id);
-                                setIsDeleteDialogOpen(true);
-                              }}
-                            >
-                              <Trash2 className="h-4 w-4 text-destructive" />
-                            </Button>
-                          </div>
-                        </div>
-                        
-                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                          <div className="space-y-2">
-                            <div className="flex items-center text-sm">
-                              <Clock className="h-4 w-4 mr-2 text-muted-foreground flex-shrink-0" />
-                              <span>{date.toLocaleDateString()} at {date.toLocaleTimeString()}</span>
-                            </div>
-                            
-                            {serve.notes && (
-                              <div className="text-sm mt-2">
-                                <span className="text-muted-foreground">Notes: </span>
-                                {serve.notes}
-                              </div>
-                            )}
-                          </div>
-                          
-                          <div className="space-y-2">
-                            <div className="flex items-start text-sm">
-                              {hasCoordinates ? (
-                                <MapPin className="h-4 w-4 mr-2 text-muted-foreground flex-shrink-0 mt-0.5" />
-                              ) : (
-                                <MapPinOff className="h-4 w-4 mr-2 text-muted-foreground flex-shrink-0 mt-0.5" />
-                              )}
-                              <div>
-                                {hasCoordinates ? (
-                                  <>
-                                    <div className="mb-1">{formattedCoords}</div>
-                                    <a 
-                                      href={googleMapsUrl} 
-                                      target="_blank" 
-                                      rel="noopener noreferrer"
-                                      className="text-primary hover:underline inline-flex items-center"
-                                    >
-                                      View on Google Maps
-                                    </a>
-                                  </>
-                                ) : (
-                                  <span>No location data</span>
-                                )}
-                              </div>
-                            </div>
-                            
-                            {serve.imageData && (
-                              <div className="mt-2">
-                                <a 
-                                  href={serve.imageData} 
-                                  target="_blank" 
-                                  rel="noopener noreferrer"
-                                  className="text-primary text-sm hover:underline inline-flex items-center"
-                                >
-                                  <FileCheck className="h-4 w-4 mr-1" />
-                                  View photo evidence
-                                </a>
-                              </div>
-                            )}
-                          </div>
-                        </div>
-                      </div>
-                    );
-                  })}
-                </CardContent>
-              </Card>
-            );
-          })}
-        </div>
+                <div className="flex items-center space-x-2 text-sm text-muted-foreground">
+                  <CalendarClock className="h-3.5 w-3.5" />
+                  <span>{formatDate(serve.timestamp)}</span>
+                </div>
+                
+                {serve.coordinates && (
+                  <div className="flex items-center space-x-2 text-sm text-muted-foreground">
+                    <MapPin className="h-3.5 w-3.5" />
+                    <span>
+                      {serve.coordinates.latitude.toFixed(6)}, {serve.coordinates.longitude.toFixed(6)}
+                    </span>
+                  </div>
+                )}
+                
+                {serve.notes && (
+                  <div className="mt-2 text-sm">
+                    <p className="text-muted-foreground line-clamp-2">{serve.notes}</p>
+                  </div>
+                )}
+              </div>
+              
+              <div className="flex gap-2 sm:flex-col mt-3 sm:mt-0">
+                {onEdit && (
+                  <Button 
+                    variant="outline" 
+                    size="sm" 
+                    className="flex-1 sm:flex-initial flex items-center"
+                    onClick={() => onEdit(serve)}
+                  >
+                    <Edit2 className="h-3.5 w-3.5 mr-1" />
+                    Edit
+                  </Button>
+                )}
+                
+                <AlertDialog open={deleteId === serve.id} onOpenChange={(open) => !open && setDeleteId(null)}>
+                  <AlertDialogTrigger asChild>
+                    <Button 
+                      variant="outline" 
+                      size="sm" 
+                      className="flex-1 sm:flex-initial flex items-center text-destructive hover:text-destructive hover:bg-destructive/10"
+                      onClick={() => handleDelete(serve.id!)}
+                    >
+                      <Trash2 className="h-3.5 w-3.5 mr-1" />
+                      Delete
+                    </Button>
+                  </AlertDialogTrigger>
+                  <AlertDialogContent>
+                    <AlertDialogHeader>
+                      <AlertDialogTitle>Delete Serve Attempt</AlertDialogTitle>
+                      <AlertDialogDescription>
+                        Are you sure you want to delete this serve attempt? This action cannot be undone.
+                      </AlertDialogDescription>
+                    </AlertDialogHeader>
+                    <AlertDialogFooter>
+                      <AlertDialogCancel onClick={() => setDeleteId(null)}>
+                        Cancel
+                      </AlertDialogCancel>
+                      <AlertDialogAction 
+                        onClick={handleDeleteConfirm}
+                        className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+                        disabled={isDeleting}
+                      >
+                        {isDeleting ? "Deleting..." : "Delete"}
+                      </AlertDialogAction>
+                    </AlertDialogFooter>
+                  </AlertDialogContent>
+                </AlertDialog>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
       ))}
-      
-      <Dialog open={isDeleteDialogOpen} onOpenChange={setIsDeleteDialogOpen}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>Delete Serve Attempt</DialogTitle>
-            <DialogDescription>
-              Are you sure you want to delete this serve attempt? This action cannot be undone.
-            </DialogDescription>
-          </DialogHeader>
-          
-          <DialogFooter>
-            <Button
-              variant="outline"
-              onClick={() => {
-                setDeletingServeId(null);
-                setIsDeleteDialogOpen(false);
-              }}
-              disabled={isDeleting}
-            >
-              Cancel
-            </Button>
-            <Button
-              variant="destructive"
-              onClick={() => {
-                if (deletingServeId) {
-                  handleDeleteServe(deletingServeId);
-                }
-              }}
-              disabled={isDeleting}
-            >
-              {isDeleting ? "Deleting..." : "Delete"}
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
     </div>
   );
-};
-
-export default ServeHistory;
+}

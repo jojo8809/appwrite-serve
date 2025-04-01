@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect, useMemo } from "react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
@@ -30,8 +29,8 @@ import { formatCoordinates } from "@/utils/gps";
 import { sendEmail, createServeEmailBody } from "@/utils/email";
 import { useToast } from "@/components/ui/use-toast";
 import { MapPin, Mail, Camera, AlertCircle, CheckCircle, Loader2, ExternalLink, Search } from "lucide-react";
-import { getClientCases, getServeAttemptsCount } from "@/utils/supabaseStorage";
-import { supabase } from "@/lib/supabase";
+import { getClientCases, getServeAttemptsCount } from "@/utils/appwriteStorage";
+import { appwrite } from "@/lib/appwrite";
 import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from "@/components/ui/command";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { useIsMobile } from "@/hooks/use-mobile";
@@ -106,80 +105,54 @@ const ServeAttempt: React.FC<ServeAttemptProps> = ({
     const fetchAllCases = async () => {
       setIsLoadingCases(true);
       try {
-        const { data, error } = await supabase
-          .from('client_cases')
-          .select('case_number, case_name, home_address, work_address, client_id, clients(name)')
-          .not('status', 'eq', 'Closed') // Add filter to exclude closed cases
-          .order('created_at', { ascending: false });
+        const activeCases = [];
         
-        if (error) {
-          console.error("Error fetching all cases:", error);
-          return;
-        }
-        
-        const mappedCases = data.map(c => {
-          let clientName = "Unknown Client";
+        for (const client of clients) {
+          const clientCases = await appwrite.getClientCases(client.id);
           
-          if (c.clients) {
-            if (Array.isArray(c.clients) && c.clients.length > 0) {
-              clientName = c.clients[0].name || "Unknown Client";
-            } 
-            else if (typeof c.clients === 'object' && c.clients !== null) {
-              const clientObj = c.clients as unknown as { name?: string };
-              clientName = clientObj.name || "Unknown Client";
+          for (const caseItem of clientCases) {
+            if (caseItem.status !== 'Closed') {
+              activeCases.push({
+                caseNumber: caseItem.caseNumber,
+                caseName: caseItem.caseName,
+                homeAddress: caseItem.homeAddress,
+                workAddress: caseItem.workAddress,
+                clientId: client.id,
+                clientName: client.name
+              });
             }
           }
-          
-          return {
-            caseNumber: c.case_number,
-            caseName: c.case_name,
-            homeAddress: c.home_address,
-            workAddress: c.work_address,
-            clientId: c.client_id,
-            clientName: clientName
-          };
-        });
+        }
         
-        setAllCases(mappedCases);
+        setAllCases(activeCases);
       } catch (error) {
-        console.error("Unexpected error fetching all cases:", error);
+        console.error("Error fetching all cases:", error);
       } finally {
         setIsLoadingCases(false);
       }
     };
     
     fetchAllCases();
-  }, []);
+  }, [clients]);
 
   useEffect(() => {
     if (selectedClient?.id) {
       const fetchCases = async () => {
         setIsLoadingCases(true);
         try {
-          const { data, error } = await supabase
-            .from('client_cases')
-            .select('case_number, case_name, home_address, work_address')
-            .eq('client_id', selectedClient.id)
-            .not('status', 'eq', 'Closed') // Add filter to exclude closed cases
-            .order('created_at', { ascending: false });
-          
-          if (error) {
-            console.error("Error fetching cases:", error);
-            return;
-          }
-          
-          const mappedCases = data.map(c => ({
-            caseNumber: c.case_number,
-            caseName: c.case_name,
-            homeAddress: c.home_address,
-            workAddress: c.work_address,
+          const clientCases = await appwrite.getClientCases(selectedClient.id);
+          const activeCases = clientCases.filter(caseItem => caseItem.status !== 'Closed').map(caseItem => ({
+            caseNumber: caseItem.caseNumber,
+            caseName: caseItem.caseName,
+            homeAddress: caseItem.homeAddress,
+            workAddress: caseItem.workAddress,
             clientId: selectedClient.id,
             clientName: selectedClient.name
           }));
           
-          setClientCases(mappedCases);
+          setClientCases(activeCases);
         } catch (error) {
-          console.error("Unexpected error fetching cases:", error);
+          console.error("Error fetching cases:", error);
         } finally {
           setIsLoadingCases(false);
         }

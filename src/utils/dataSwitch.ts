@@ -1,4 +1,3 @@
-
 import { toast } from 'sonner';
 import { appwrite } from '@/lib/appwrite';
 import { ServeAttemptData } from '@/components/ServeAttempt';
@@ -10,7 +9,6 @@ export const clearLocalStorage = () => {
     // Remove all app data from local storage
     localStorage.removeItem("serve-tracker-clients");
     localStorage.removeItem("serve-tracker-serves");
-    localStorage.removeItem("supabase.auth.token");
     
     toast.success("Local storage cleared", {
       description: "All local data has been reset"
@@ -91,7 +89,18 @@ export const loadDataFromAppwrite = async (): Promise<{
     }));
     
     // Get serve attempts from Appwrite
-    const serves = await appwrite.getServeAttempts();
+    const appwriteServes = await appwrite.getServeAttempts();
+    const serves = appwriteServes.map(serve => ({
+      id: serve.$id,
+      clientId: serve.clientId,
+      date: serve.date,
+      time: serve.time,
+      address: serve.address,
+      notes: serve.notes,
+      status: serve.status,
+      imageData: serve.imageData,
+      coordinates: serve.coordinates
+    }));
     
     console.log(`Loaded ${clients.length} clients and ${serves.length} serve attempts from Appwrite`);
     
@@ -121,11 +130,6 @@ export const saveClientToAppwrite = async (client: ClientData): Promise<ClientDa
 };
 
 export const checkAppwriteConnection = async (): Promise<boolean> => {
-  if (ACTIVE_BACKEND !== BACKEND_PROVIDER.APPWRITE) {
-    console.log("Appwrite is not the active backend provider");
-    return false;
-  }
-  
   try {
     // Try to get a list of clients to test connection
     const clients = await appwrite.getClients();
@@ -137,7 +141,7 @@ export const checkAppwriteConnection = async (): Promise<boolean> => {
   }
 };
 
-// Add a new function to determine which backend to use
+// Helper function to determine which backend to use
 export const getActiveBackend = () => {
-  return ACTIVE_BACKEND;
+  return BACKEND_PROVIDER.APPWRITE; // Always return Appwrite
 };

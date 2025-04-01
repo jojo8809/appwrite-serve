@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -7,7 +6,7 @@ import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle }
 import { useToast } from "@/hooks/use-toast";
 import { sendEmail } from "@/utils/email";
 import { Loader2, Mail, CheckCircle, XCircle, AlertCircle } from "lucide-react";
-import { isSupabaseConfigured } from "@/lib/supabase";
+import { isAppwriteConfigured } from "@/config/backendConfig";
 
 const Index = () => {
   const [recipientEmail, setRecipientEmail] = useState("");
@@ -23,17 +22,17 @@ const Index = () => {
   const { toast } = useToast();
 
   useEffect(() => {
-    // Check if Supabase is configured
-    const configured = isSupabaseConfigured();
-    setIsSupabaseReady(configured);
+    // Check if Appwrite is configured
+    const configured = isAppwriteConfigured();
+    setIsSupabaseReady(configured); // Keeping the variable name for simplicity
     
     if (!configured) {
-      setError("Supabase configuration is missing. Email functionality may not work.");
+      setError("Appwrite configuration is missing. Email functionality may not work.");
     }
     
     // Log environment details for debugging
     console.log("Environment check:");
-    console.log("- Supabase configured:", configured);
+    console.log("- Appwrite configured:", configured);
     console.log("- URL:", window.location.href);
     console.log("- User agent:", navigator.userAgent);
   }, []);
@@ -119,7 +118,7 @@ const Index = () => {
           <div className="mx-6 mb-4 bg-amber-50 p-3 rounded-md flex items-start gap-2">
             <AlertCircle className="h-5 w-5 text-amber-500 mt-0.5" />
             <p className="text-amber-700 text-sm">
-              Supabase configuration may be incomplete. Email functionality might not work properly.
+              Appwrite configuration may be incomplete. Email functionality might not work properly.
             </p>
           </div>
         )}

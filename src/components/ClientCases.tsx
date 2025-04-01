@@ -54,22 +54,22 @@ import {
   MapPin,
   ExternalLink
 } from "lucide-react";
-import { supabase } from "@/lib/supabase";
-import { uploadClientDocument, getClientDocuments, getDocumentUrl, deleteClientDocument, UploadedDocument } from "@/utils/supabaseStorage";
+import { appwrite } from "@/lib/appwrite";
+import { uploadClientDocument, getClientDocuments, getDocumentUrl, deleteClientDocument } from "@/utils/appwriteStorage";
 import ClientDocuments from "@/components/ClientDocuments";
 import { useIsMobile } from "@/hooks/use-mobile";
 
 interface ClientCase {
-  id: string;
-  client_id: string;
-  case_number: string;
-  case_name: string | null;
+  $id: string;
+  clientId: string;
+  caseNumber: string;
+  caseName: string | null;
   description: string | null;
   status: string;
-  created_at: string;
-  updated_at: string;
-  home_address?: string;
-  work_address?: string;
+  createdAt: string;
+  updatedAt: string;
+  homeAddress?: string;
+  workAddress?: string;
 }
 
 interface ClientCasesProps {
@@ -112,18 +112,12 @@ export default function ClientCases({ clientId, clientName }: ClientCasesProps) 
     const fetchCases = async () => {
       setIsLoading(true);
       try {
-        const { data, error } = await supabase
-          .from('client_cases')
-          .select('*')
-          .eq('client_id', clientId)
-          .order('created_at', { ascending: false });
+        const cases = await appwrite.getClientCases(clientId);
         
-        if (error) throw error;
+        setCases(cases);
         
-        setCases(data);
-        
-        if (data.length > 0 && !activeCase) {
-          setActiveCase(data[0].id);
+        if (cases.length > 0 && !activeCase) {
+          setActiveCase(cases[0].$id);
         }
       } catch (error) {
         console.error("Error fetching client cases:", error);
@@ -141,7 +135,7 @@ export default function ClientCases({ clientId, clientName }: ClientCasesProps) 
       console.log("Cases updated event received, refreshing cases");
       fetchCases();
     };
-    
+
     window.addEventListener('cases-updated', handleCasesUpdated);
     
     return () => {
@@ -161,82 +155,61 @@ export default function ClientCases({ clientId, clientName }: ClientCasesProps) 
     setFileDescription("");
   };
 
-  const handleAddCase = async (e: React.FormEvent) => {
-    e.preventDefault();
-    
+  const handleAddCase = async () => {
+    if (!caseNumber.trim()) {
+      toast.error("Case number is required");
+      return;
+    }
+
     setIsSaving(true);
     
     try {
-      console.log("Adding new case with client_id:", clientId);
-      
-      const { data, error } = await supabase
-        .from('client_cases')
-        .insert({
-          client_id: clientId,
-          case_number: caseNumber,
-          case_name: caseName || null,
-          description: description || null,
-          home_address: homeAddress || null,
-          work_address: workAddress || null,
-          status: status
-        })
-        .select()
-        .single();
-      
-      if (error) {
-        console.error("Error details:", error);
-        throw error;
-      }
-      
-      setCases(prevCases => [data, ...prevCases]);
-      
-      if (cases.length === 0) {
-        setActiveCase(data.id);
-      }
-      
-      setAddCaseDialogOpen(false);
-      resetForm();
+      const newCase = await appwrite.createClientCase({
+        clientId,
+        caseNumber,
+        caseName,
+        courtName: description,
+        status,
+        homeAddress,
+        workAddress
+      });
       
       toast.success("Case added", {
-        description: "New case has been added for this client."
+        description: "New case has been created successfully"
       });
+      
+      setCases(prev => [...prev, newCase]);
+      setActiveCase(newCase.$id);
+      setAddCaseDialogOpen(false);
+      
+      resetForm();
     } catch (error) {
       console.error("Error adding case:", error);
       toast.error("Error adding case", {
-        description: "There was a problem adding the case. Please make sure the client exists."
+        description: "Failed to create the new case"
       });
     } finally {
       setIsSaving(false);
     }
   };
 
-  const handleUpdateCase = async (e: React.FormEvent) => {
-    e.preventDefault();
-    
+  const handleUpdateCase = async () => {
     if (!selectedCase) return;
     
     setIsSaving(true);
     
     try {
-      const { data, error } = await supabase
-        .from('client_cases')
-        .update({
-          case_number: caseNumber,
-          case_name: caseName,
-          description,
-          home_address: homeAddress,
-          work_address: workAddress,
-          status,
-          updated_at: new Date().toISOString()
-        })
-        .eq('id', selectedCase.id)
-        .select()
-        .single();
-      
-      if (error) throw error;
+      const updatedCase = await appwrite.updateClientCase(selectedCase.$id, {
+        caseNumber,
+        caseName,
+        courtName: description,
+        status,
+        homeAddress,
+        workAddress
+      });
       
       setCases(prevCases => 
-        prevCases.map(c => c.id === selectedCase.id ? data : c)
+        prevCases.map(c => c.$id === selectedCase.$id ? updatedCase : c)
       );
       
       setEditCaseDialogOpen(false);
@@ -259,18 +232,13 @@ export default function ClientCases({ clientId, clientName }: ClientCasesProps) 
     if (!selectedCase) return;
     
     try {
-      const { error } = await supabase
-        .from('client_cases')
-        .delete()
-        .eq('id', selectedCase.id);
+      await appwrite.deleteClientCase(selectedCase.$id);
       
-      if (error) throw error;
+      setCases(prevCases => prevCases.filter(c => c.$id !== selectedCase.$id));
       
-      setCases(prevCases => prevCases.filter(c => c.id !== selectedCase.id));
-      
-      if (activeCase === selectedCase.id) {
-        const remainingCases = cases.filter(c => c.id !== selectedCase.id);
-        setActiveCase(remainingCases.length > 0 ? remainingCases[0].id : null);
+      if (activeCase === selectedCase.$id) {
+        const remainingCases = cases.filter(c => c.$id !== selectedCase.$id);
+        setActiveCase(remainingCases.length > 0 ? remainingCases[0].$id : null);
       }
       
       setDeleteCaseDialogOpen(false);
@@ -289,11 +257,11 @@ export default function ClientCases({ clientId, clientName }: ClientCasesProps) 
 
   const handleEditCase = (clientCase: ClientCase) => {
     setSelectedCase(clientCase);
-    setCaseNumber(clientCase.case_number);
-    setCaseName(clientCase.case_name);
+    setCaseNumber(clientCase.caseNumber);
+    setCaseName(clientCase.caseName);
     setDescription(clientCase.description);
-    setHomeAddress(clientCase.home_address || "");
-    setWorkAddress(clientCase.work_address || "");
+    setHomeAddress(clientCase.homeAddress || "");
+    setWorkAddress(clientCase.workAddress || "");
     setStatus(clientCase.status);
     setEditCaseDialogOpen(true);
   };
@@ -317,13 +285,13 @@ export default function ClientCases({ clientId, clientName }: ClientCasesProps) 
     setIsUploading(true);
     
     try {
-      const activeClientCase = cases.find(c => c.id === activeCase);
+      const activeClientCase = cases.find(c => c.$id === activeCase);
       if (!activeClientCase) throw new Error("Case not found");
       
       const document = await uploadClientDocument(
         clientId,
         selectedFile,
-        activeClientCase.case_number,
+        activeClientCase.caseNumber,
         fileDescription
       );
       
@@ -400,7 +368,7 @@ export default function ClientCases({ clientId, clientName }: ClientCasesProps) 
   };
 
   const getActiveCase = () => {
-    return cases.find(c => c.id === activeCase);
+    return cases.find(c => c.$id === activeCase);
   };
 
   const getMapLink = (address: string) => {
@@ -417,7 +385,7 @@ export default function ClientCases({ clientId, clientName }: ClientCasesProps) 
 
   const handleUploadFromEditDialog = () => {
     if (selectedCase) {
-      setActiveCase(selectedCase.id);
+      setActiveCase(selectedCase.$id);
       setEditCaseDialogOpen(false);
       setUploadDialogOpen(true);
     }
@@ -450,7 +418,10 @@ export default function ClientCases({ clientId, clientName }: ClientCasesProps) 
                   </DialogDescription>
                 </DialogHeader>
                 
-                <form onSubmit={handleAddCase}>
+                <form onSubmit={(e) => {
+                  e.preventDefault();
+                  handleAddCase();
+                }}>
                   <div className="grid gap-4 py-4">
                     <div className="space-y-2">
                       <Label htmlFor="case-number">Case Number</Label>
@@ -567,14 +538,14 @@ export default function ClientCases({ clientId, clientName }: ClientCasesProps) 
               <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-3 sm:gap-6">
                 {cases.map((c) => (
                   <Card 
-                    key={c.id} 
-                    className={`overflow-hidden cursor-pointer transition-all hover:shadow-md w-full ${activeCase === c.id ? 'ring-2 ring-primary' : ''}`}
-                    onClick={() => setActiveCase(c.id)}
+                    key={c.$id} 
+                    className={`overflow-hidden cursor-pointer transition-all hover:shadow-md w-full ${activeCase === c.$id ? 'ring-2 ring-primary' : ''}`}
+                    onClick={() => setActiveCase(c.$id)}
                   >
                     <CardHeader className="pb-2">
                       <div className="flex justify-between">
                         <CardTitle className="flex-1 truncate">
-                          {c.case_name || c.case_number}
+                          {c.caseName || c.caseNumber}
                         </CardTitle>
                         
                         <div className="flex items-center gap-1">
@@ -605,7 +576,7 @@ export default function ClientCases({ clientId, clientName }: ClientCasesProps) 
                       </div>
                       
                       <CardDescription className="flex items-center justify-between">
-                        <span className="truncate">Case #{c.case_number}</span>
+                        <span className="truncate">Case #{c.caseNumber}</span>
                         <span className={`text-xs px-2 py-0.5 rounded-full ${
                           c.status === 'Active' ? 'bg-green-100 text-green-800' :
                           c.status === 'Pending' ? 'bg-yellow-100 text-yellow-800' :
@@ -624,34 +595,34 @@ export default function ClientCases({ clientId, clientName }: ClientCasesProps) 
                         </div>
                       )}
                       
-                      {(c.home_address || c.work_address) && (
+                      {(c.homeAddress || c.workAddress) && (
                         <div className="space-y-2 mt-2">
                           <h4 className="font-medium">Addresses</h4>
                           <div className="space-y-2">
-                            {c.home_address && (
+                            {c.homeAddress && (
                               <a 
-                                href={getMapLink(c.home_address)}
+                                href={getMapLink(c.homeAddress)}
                                 className="text-sm text-primary hover:underline flex items-center group"
                                 target="_blank"
                                 rel="noopener noreferrer"
-                                onClick={(e) => handleAddressClick(c.home_address, e)}
+                                onClick={(e) => handleAddressClick(c.homeAddress, e)}
                               >
                                 <Home className="h-3 w-3 mr-1 inline flex-shrink-0" />
-                                <span className="flex-1 truncate">{c.home_address}</span>
+                                <span className="flex-1 truncate">{c.homeAddress}</span>
                                 <ExternalLink className="h-3 w-3 ml-1 opacity-0 group-hover:opacity-100 transition-opacity flex-shrink-0" />
                               </a>
                             )}
                             
-                            {c.work_address && (
+                            {c.workAddress && (
                               <a 
-                                href={getMapLink(c.work_address)}
+                                href={getMapLink(c.workAddress)}
                                 className="text-sm text-primary hover:underline flex items-center group"
                                 target="_blank"
                                 rel="noopener noreferrer"
-                                onClick={(e) => handleAddressClick(c.work_address, e)}
+                                onClick={(e) => handleAddressClick(c.workAddress, e)}
                               >
                                 <Building className="h-3 w-3 mr-1 inline flex-shrink-0" />
-                                <span className="flex-1 truncate">{c.work_address}</span>
+                                <span className="flex-1 truncate">{c.workAddress}</span>
                                 <ExternalLink className="h-3 w-3 ml-1 opacity-0 group-hover:opacity-100 transition-opacity flex-shrink-0" />
                               </a>
                             )}
@@ -661,7 +632,7 @@ export default function ClientCases({ clientId, clientName }: ClientCasesProps) 
                       
                       <div className="flex items-center space-x-2 mt-3 text-xs text-muted-foreground">
                         <Clock className="h-3 w-3 flex-shrink-0" />
-                        <span>Created {new Date(c.created_at).toLocaleDateString()}</span>
+                        <span>Created {new Date(c.createdAt).toLocaleDateString()}</span>
                       </div>
                     </CardContent>
                   </Card>
@@ -673,12 +644,12 @@ export default function ClientCases({ clientId, clientName }: ClientCasesProps) 
                   <CardHeader>
                     <div className="flex justify-between items-center">
                       <CardTitle className="truncate">
-                        {getActiveCase()?.case_name || getActiveCase()?.case_number}
+                        {getActiveCase()?.caseName || getActiveCase()?.caseNumber}
                       </CardTitle>
                     </div>
                     <CardDescription className="flex items-center justify-between">
                       <span>
-                        Case #{getActiveCase()?.case_number} - 
+                        Case #{getActiveCase()?.caseNumber} - 
                         <span className={`ml-2 ${
                           getActiveCase()?.status === 'Active' ? 'text-green-600' :
                           getActiveCase()?.status === 'Pending' ? 'text-yellow-600' :
@@ -694,7 +665,7 @@ export default function ClientCases({ clientId, clientName }: ClientCasesProps) 
                     <div className="space-y-6">
                       <ClientDocuments 
                         clientId={clientId}
-                        caseNumber={getActiveCase()?.case_number}
+                        caseNumber={getActiveCase()?.caseNumber}
                       />
                     </div>
                   </CardContent>
@@ -722,7 +693,10 @@ export default function ClientCases({ clientId, clientName }: ClientCasesProps) 
             </DialogDescription>
           </DialogHeader>
           
-          <form onSubmit={handleUpdateCase}>
+          <form onSubmit={(e) => {
+            e.preventDefault();
+            handleUpdateCase();
+          }}>
             <div className="grid gap-4 py-4">
               <div className="space-y-2">
                 <Label htmlFor="edit-case-number">Case Number</Label>

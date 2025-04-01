@@ -1,4 +1,3 @@
-
 import React, { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { Button } from "@/components/ui/button";
@@ -8,7 +7,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { format } from "date-fns";
 import { Calendar as CalendarIcon, Download, FileSpreadsheet, ArrowLeft, Loader2 } from "lucide-react";
 import { cn } from "@/lib/utils";
-import { exportServeData } from "@/utils/supabaseStorage";
+import { exportServeData } from "@/utils/appwriteStorage";
 import { useToast } from "@/hooks/use-toast";
 
 const DataExport: React.FC = () => {
@@ -44,19 +43,25 @@ const DataExport: React.FC = () => {
         
         link.setAttribute("href", url);
         link.setAttribute("download", fileName);
-        link.style.visibility = "hidden";
-        
         document.body.appendChild(link);
         link.click();
         document.body.removeChild(link);
         
-        console.log(`Export complete: Data exported to ${fileName}`);
+        toast({
+          title: "Export successful",
+          description: `Data exported to ${fileName}`,
+          variant: "success"
+        });
       } else {
-        console.log("Export failed: " + (result.error || "No data found in the selected date range"));
+        throw new Error(result.error || "Failed to export data");
       }
     } catch (error) {
-      console.error("Export error:", error);
-      console.log("Export failed: " + (error instanceof Error ? error.message : "An unexpected error occurred"));
+      console.error("Error exporting data:", error);
+      toast({
+        title: "Export failed",
+        description: error instanceof Error ? error.message : "An error occurred during export",
+        variant: "destructive"
+      });
     } finally {
       setIsExporting(false);
     }

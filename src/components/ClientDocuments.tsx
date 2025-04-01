@@ -38,18 +38,9 @@ import {
   FileCheck,
   Briefcase
 } from "lucide-react";
-import { 
-  uploadClientDocument, 
-  getClientDocuments, 
-  getDocumentUrl, 
-  deleteClientDocument,
-  getClientCases,
-  type UploadedDocument 
-} from "@/utils/appwriteStorage";
 import { toast } from "@/hooks/use-toast";
 import { useIsMobile } from "@/hooks/use-mobile";
-import { ACTIVE_BACKEND, BACKEND_PROVIDER, shouldUseFallbackStorage } from '@/config/backendConfig';
-import * as supabaseStorage from '@/utils/supabaseStorage';
+import { ACTIVE_BACKEND, BACKEND_PROVIDER } from '@/config/backendConfig';
 import * as appwriteStorage from '@/utils/appwriteStorage';
 
 interface ClientDocumentsProps {
@@ -71,9 +62,7 @@ export default function ClientDocuments({ clientId, clientName, caseNumber, onUp
   const [isLoading, setIsLoading] = useState(true);
   const isMobile = useIsMobile();
   
-  const storage = ACTIVE_BACKEND === BACKEND_PROVIDER.SUPABASE 
-    ? supabaseStorage 
-    : appwriteStorage;
+  const storage = appwriteStorage;
   
   useEffect(() => {
     if (clientId) {
@@ -95,8 +84,10 @@ export default function ClientDocuments({ clientId, clientName, caseNumber, onUp
       setDocuments(docs);
     } catch (error) {
       console.error("Error loading documents:", error);
-      toast.error("Failed to load documents", {
-        position: "bottom-right"
+      toast({
+        title: "Error",
+        description: "Failed to load documents",
+        variant: "destructive"
       });
     } finally {
       setIsLoading(false);

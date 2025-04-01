@@ -1,5 +1,4 @@
-
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import ServeHistory from "@/components/ServeHistory";
 import { ClientData } from "@/components/ClientForm";
 import { ServeAttemptData } from "@/components/ServeAttempt";
@@ -63,6 +62,29 @@ const History: React.FC<HistoryProps> = ({
     setIsEditDialogOpen(true);
   };
 
+  const handleDelete = async (id: string) => {
+    try {
+      const success = await deleteServe(id);
+      
+      if (success) {
+        toast({
+          title: "Success",
+          description: "Serve attempt has been deleted",
+          variant: "default"
+        });
+      } else {
+        throw new Error("Failed to delete serve attempt");
+      }
+    } catch (error) {
+      console.error("Error deleting serve attempt:", error);
+      toast({
+        title: "Error",
+        description: "Failed to delete serve attempt",
+        variant: "destructive"
+      });
+    }
+  };
+
   return (
     <div className="page-container">
       <div className="mb-8">
@@ -99,7 +121,7 @@ const History: React.FC<HistoryProps> = ({
         <ServeHistory 
           serves={serves} 
           clients={clients} 
-          onDelete={deleteServe}
+          onDelete={handleDelete}
           onEdit={handleEditServe}
         />
       )}

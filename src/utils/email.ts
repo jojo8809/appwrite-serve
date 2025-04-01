@@ -1,4 +1,3 @@
-
 import { appwrite } from "@/lib/appwrite";
 
 interface EmailProps {
@@ -6,7 +5,7 @@ interface EmailProps {
   subject: string;
   body: string;
   imageData?: string;
-  coordinates?: GeolocationCoordinates;
+  coordinates?: { lat: number; lng: number };
 }
 
 /**
@@ -70,7 +69,7 @@ export const sendEmail = async (props: EmailProps): Promise<{ success: boolean; 
     console.error(`Exception in email sending:`, error);
     return {
       success: false,
-      message: error instanceof Error ? error.message : "Failed to send email"
+      message: error instanceof Error ? error.message : "Unknown error sending email"
     };
   }
 };

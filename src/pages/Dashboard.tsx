@@ -1,4 +1,3 @@
-
 import React from "react";
 import { Button } from "@/components/ui/button";
 import { 
@@ -24,7 +23,7 @@ import { ClientData } from "@/components/ClientForm";
 import ServeHistory from "@/components/ServeHistory";
 import { useState, useEffect } from "react";
 import EditServeDialog from "@/components/EditServeDialog";
-import { updateServeAttempt, syncSupabaseServesToLocal } from "@/lib/supabase";
+import { appwrite } from "@/lib/appwrite";
 
 interface DashboardProps {
   clients: ClientData[];
@@ -55,6 +54,25 @@ const Dashboard: React.FC<DashboardProps> = ({ clients, serves }) => {
     return serveDate.toDateString() === today.toDateString();
   }).length;
 
+  // Update a serve attempt
+  const updateServe = async (serveData: ServeAttemptData) => {
+    try {
+      const updatedServe = await appwrite.updateServeAttempt(serveData.id!, {
+        ...serveData,
+        date: serveData.timestamp.toLocaleDateString(),
+        time: serveData.timestamp.toLocaleTimeString()
+      });
+      
+      if (updatedServe) {
+        return true;
+      }
+      return false;
+    } catch (error) {
+      console.error("Error updating serve attempt:", error);
+      return false;
+    }
+  };
+
   // Handle edit serve
   const handleEditServe = (serve: ServeAttemptData) => {
     console.log("Opening edit dialog for serve:", serve);
@@ -63,33 +81,20 @@ const Dashboard: React.FC<DashboardProps> = ({ clients, serves }) => {
   };
 
   // Handle save edited serve
-  const handleSaveServe = async (updatedServe: ServeAttemptData) => {
-    console.log("Dashboard: Saving updated serve:", updatedServe);
+  const handleServeUpdate = async (updatedServe: ServeAttemptData) => {
     try {
-      // Update using the supabase utility function
-      const result = await updateServeAttempt(updatedServe);
+      const success = await updateServe(updatedServe);
       
-      if (result.success) {
-        console.log("Dashboard: Successfully updated serve in Supabase");
-        
-        // Update local state
-        setLocalServes(prevServes => 
-          prevServes.map(serve => 
-            serve.id === updatedServe.id ? updatedServe : serve
-          )
+      if (success) {
+        setLocalServes(prev => 
+          prev.map(serve => serve.id === updatedServe.id ? updatedServe : serve)
         );
         
-        // Force a sync to ensure all data is updated
-        await syncSupabaseServesToLocal();
-        
-        return true;
-      } else {
-        console.error("Dashboard: Failed to update serve:", result.error);
-        return false;
+        setEditDialogOpen(false);
+        setEditingServe(null);
       }
     } catch (error) {
-      console.error("Dashboard: Error updating serve:", error);
-      return false;
+      console.error("Error updating serve:", error);
     }
   };
 
@@ -271,7 +276,7 @@ const Dashboard: React.FC<DashboardProps> = ({ clients, serves }) => {
           serve={editingServe}
           open={editDialogOpen}
           onOpenChange={setEditDialogOpen}
-          onSave={handleSaveServe}
+          onSave={handleServeUpdate}
         />
       )}
     </div>

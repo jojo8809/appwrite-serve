@@ -1,3 +1,4 @@
+
 import { ACTIVE_BACKEND, BACKEND_PROVIDER } from '@/config/backendConfig';
 import { appwrite } from '@/lib/appwrite';
 import { toast } from 'sonner';
@@ -10,10 +11,16 @@ export const isUsingAppwrite = () => {
 // Helper function to check if we're properly connected to the active backend
 export const checkBackendConnection = async () => {
   try {
-    const clients = await appwrite.getClients();
+    // Try to list clients to check if we're connected
+    const clients = await appwrite.databases.listDocuments(
+      appwrite.DATABASE_ID,
+      appwrite.CLIENTS_COLLECTION_ID
+    );
+    
     // If we get here, we're connected
     // Reset any fallback flags
     window.localStorage.removeItem('useLocalStorageFallback');
+    console.log("Successfully connected to Appwrite");
     return { connected: true, provider: 'Appwrite' };
   } catch (error) {
     console.error("Appwrite connection check failed:", error);

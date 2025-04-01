@@ -58,22 +58,20 @@ const Clients: React.FC<ClientsProps> = ({
   const handleAddClient = async (client: ClientData) => {
     setIsLoading(true);
     
-    const newClientId = `client-${Date.now()}`;
-    const newClient = {
-      ...client,
-      id: newClientId,
-    };
-    
     try {
-      // Use Appwrite to add client
-      const success = await appwrite.database.createDocument("clients", newClientId, newClient);
-      
-      if (success) {
-        addClient(newClient);
-        setIsAddDialogOpen(false);
-      }
+      await addClient(client);
+      toast({
+        title: "Client added",
+        description: "New client has been created successfully",
+      });
+      setIsAddDialogOpen(false);
     } catch (error) {
       console.error("Error adding client:", error);
+      toast({
+        title: "Error",
+        description: "Failed to add client",
+        variant: "destructive"
+      });
     } finally {
       setIsLoading(false);
     }
@@ -83,14 +81,18 @@ const Clients: React.FC<ClientsProps> = ({
     setIsLoading(true);
     
     try {
-      // Use Appwrite to update client
-      const success = await appwrite.database.updateDocument("clients", client.id, client);
-      
-      if (success) {
-        updateClient(client);
-      }
+      await updateClient(client);
+      toast({
+        title: "Client updated",
+        description: "Client information has been updated successfully",
+      });
     } catch (error) {
       console.error("Error updating client:", error);
+      toast({
+        title: "Error",
+        description: "Failed to update client",
+        variant: "destructive"
+      });
     } finally {
       setIsLoading(false);
     }
@@ -100,18 +102,15 @@ const Clients: React.FC<ClientsProps> = ({
     if (deleteClientId) {
       setIsLoading(true);
       try {
-        // Let App.tsx handle the deletion, it uses Appwrite now
         const success = await deleteClient(deleteClientId);
         
         if (success) {
           toast({
             title: "Client deleted",
             description: "Client has been successfully removed",
-            variant: "success"
           });
         }
         
-        // Update local state
         if (selectedClient?.id === deleteClientId) {
           setSelectedClient(null);
           setIsDetailView(false);

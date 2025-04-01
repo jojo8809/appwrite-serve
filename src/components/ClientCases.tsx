@@ -61,15 +61,15 @@ import { useIsMobile } from "@/hooks/use-mobile";
 
 interface ClientCase {
   $id: string;
-  clientId: string;
-  caseNumber: string;
-  caseName: string | null;
+  client_id: string;
+  case_number: string;
+  case_name: string | null;
   description: string | null;
   status: string;
-  createdAt: string;
-  updatedAt: string;
-  homeAddress?: string;
-  workAddress?: string;
+  created_at: string;
+  updated_at: string;
+  home_address?: string;
+  work_address?: string;
 }
 
 interface ClientCasesProps {
@@ -112,7 +112,9 @@ export default function ClientCases({ clientId, clientName }: ClientCasesProps) 
     const fetchCases = async () => {
       setIsLoading(true);
       try {
+        console.log('Fetching cases for client:', clientId);
         const cases = await appwrite.getClientCases(clientId);
+        console.log('Cases fetched:', cases);
         
         setCases(cases);
         
@@ -164,30 +166,32 @@ export default function ClientCases({ clientId, clientName }: ClientCasesProps) 
     setIsSaving(true);
     
     try {
-      const newCase = await appwrite.createClientCase({
+      const caseData = {
         clientId,
-        caseNumber,
-        caseName,
-        courtName: description,
-        status,
-        homeAddress,
-        workAddress
-      });
+        caseNumber: caseNumber.trim(),
+        caseName: caseName.trim(),
+        description: description.trim(),
+        status: status || 'Active',
+        homeAddress: homeAddress.trim(),
+        workAddress: workAddress.trim()
+      };
+
+      console.log('Submitting case data:', caseData);
+      const newCase = await appwrite.createClientCase(caseData);
+      console.log('New case created:', newCase);
       
-      toast.success("Case added", {
-        description: "New case has been created successfully"
-      });
-      
+      if (!newCase) {
+        throw new Error('Failed to create case');
+      }
+
+      toast.success("Case added successfully");
       setCases(prev => [...prev, newCase]);
       setActiveCase(newCase.$id);
       setAddCaseDialogOpen(false);
-      
       resetForm();
     } catch (error) {
       console.error("Error adding case:", error);
-      toast.error("Error adding case", {
-        description: "Failed to create the new case"
-      });
+      toast.error("Failed to create case");
     } finally {
       setIsSaving(false);
     }
@@ -202,7 +206,7 @@ export default function ClientCases({ clientId, clientName }: ClientCasesProps) 
       const updatedCase = await appwrite.updateClientCase(selectedCase.$id, {
         caseNumber,
         caseName,
-        courtName: description,
+        description,
         status,
         homeAddress,
         workAddress
@@ -257,11 +261,11 @@ export default function ClientCases({ clientId, clientName }: ClientCasesProps) 
 
   const handleEditCase = (clientCase: ClientCase) => {
     setSelectedCase(clientCase);
-    setCaseNumber(clientCase.caseNumber);
-    setCaseName(clientCase.caseName);
+    setCaseNumber(clientCase.case_number);
+    setCaseName(clientCase.case_name);
     setDescription(clientCase.description);
-    setHomeAddress(clientCase.homeAddress || "");
-    setWorkAddress(clientCase.workAddress || "");
+    setHomeAddress(clientCase.home_address || "");
+    setWorkAddress(clientCase.work_address || "");
     setStatus(clientCase.status);
     setEditCaseDialogOpen(true);
   };
@@ -291,7 +295,7 @@ export default function ClientCases({ clientId, clientName }: ClientCasesProps) 
       const document = await uploadClientDocument(
         clientId,
         selectedFile,
-        activeClientCase.caseNumber,
+        activeClientCase.case_number,
         fileDescription
       );
       
@@ -545,7 +549,7 @@ export default function ClientCases({ clientId, clientName }: ClientCasesProps) 
                     <CardHeader className="pb-2">
                       <div className="flex justify-between">
                         <CardTitle className="flex-1 truncate">
-                          {c.caseName || c.caseNumber}
+                          {c.case_name || c.case_number}
                         </CardTitle>
                         
                         <div className="flex items-center gap-1">
@@ -576,7 +580,7 @@ export default function ClientCases({ clientId, clientName }: ClientCasesProps) 
                       </div>
                       
                       <CardDescription className="flex items-center justify-between">
-                        <span className="truncate">Case #{c.caseNumber}</span>
+                        <span className="truncate">Case #{c.case_number}</span>
                         <span className={`text-xs px-2 py-0.5 rounded-full ${
                           c.status === 'Active' ? 'bg-green-100 text-green-800' :
                           c.status === 'Pending' ? 'bg-yellow-100 text-yellow-800' :
@@ -595,34 +599,34 @@ export default function ClientCases({ clientId, clientName }: ClientCasesProps) 
                         </div>
                       )}
                       
-                      {(c.homeAddress || c.workAddress) && (
+                      {(c.home_address || c.work_address) && (
                         <div className="space-y-2 mt-2">
                           <h4 className="font-medium">Addresses</h4>
                           <div className="space-y-2">
-                            {c.homeAddress && (
+                            {c.home_address && (
                               <a 
-                                href={getMapLink(c.homeAddress)}
+                                href={getMapLink(c.home_address)}
                                 className="text-sm text-primary hover:underline flex items-center group"
                                 target="_blank"
                                 rel="noopener noreferrer"
-                                onClick={(e) => handleAddressClick(c.homeAddress, e)}
+                                onClick={(e) => handleAddressClick(c.home_address, e)}
                               >
                                 <Home className="h-3 w-3 mr-1 inline flex-shrink-0" />
-                                <span className="flex-1 truncate">{c.homeAddress}</span>
+                                <span className="flex-1 truncate">{c.home_address}</span>
                                 <ExternalLink className="h-3 w-3 ml-1 opacity-0 group-hover:opacity-100 transition-opacity flex-shrink-0" />
                               </a>
                             )}
                             
-                            {c.workAddress && (
+                            {c.work_address && (
                               <a 
-                                href={getMapLink(c.workAddress)}
+                                href={getMapLink(c.work_address)}
                                 className="text-sm text-primary hover:underline flex items-center group"
                                 target="_blank"
                                 rel="noopener noreferrer"
-                                onClick={(e) => handleAddressClick(c.workAddress, e)}
+                                onClick={(e) => handleAddressClick(c.work_address, e)}
                               >
                                 <Building className="h-3 w-3 mr-1 inline flex-shrink-0" />
-                                <span className="flex-1 truncate">{c.workAddress}</span>
+                                <span className="flex-1 truncate">{c.work_address}</span>
                                 <ExternalLink className="h-3 w-3 ml-1 opacity-0 group-hover:opacity-100 transition-opacity flex-shrink-0" />
                               </a>
                             )}
@@ -632,7 +636,7 @@ export default function ClientCases({ clientId, clientName }: ClientCasesProps) 
                       
                       <div className="flex items-center space-x-2 mt-3 text-xs text-muted-foreground">
                         <Clock className="h-3 w-3 flex-shrink-0" />
-                        <span>Created {new Date(c.createdAt).toLocaleDateString()}</span>
+                        <span>Created {new Date(c.created_at).toLocaleDateString()}</span>
                       </div>
                     </CardContent>
                   </Card>
@@ -644,12 +648,12 @@ export default function ClientCases({ clientId, clientName }: ClientCasesProps) 
                   <CardHeader>
                     <div className="flex justify-between items-center">
                       <CardTitle className="truncate">
-                        {getActiveCase()?.caseName || getActiveCase()?.caseNumber}
+                        {getActiveCase()?.case_name || getActiveCase()?.case_number}
                       </CardTitle>
                     </div>
                     <CardDescription className="flex items-center justify-between">
                       <span>
-                        Case #{getActiveCase()?.caseNumber} - 
+                        Case #{getActiveCase()?.case_number} - 
                         <span className={`ml-2 ${
                           getActiveCase()?.status === 'Active' ? 'text-green-600' :
                           getActiveCase()?.status === 'Pending' ? 'text-yellow-600' :
@@ -665,7 +669,7 @@ export default function ClientCases({ clientId, clientName }: ClientCasesProps) 
                     <div className="space-y-6">
                       <ClientDocuments 
                         clientId={clientId}
-                        caseNumber={getActiveCase()?.caseNumber}
+                        caseNumber={getActiveCase()?.case_number}
                       />
                     </div>
                   </CardContent>

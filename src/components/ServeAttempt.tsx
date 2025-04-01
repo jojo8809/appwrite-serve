@@ -71,6 +71,20 @@ const serveAttemptSchema = z.object({
 
 type ServeFormValues = z.infer<typeof serveAttemptSchema>;
 
+const filterCases = (cases: ClientCase[], query: string) => {
+  if (!query.trim()) return cases;
+
+  const lowerQuery = query.toLowerCase();
+  return cases.filter(
+    (c) =>
+      c.caseNumber?.toLowerCase().includes(lowerQuery) || 
+      c.caseName?.toLowerCase().includes(lowerQuery) || 
+      c.homeAddress?.toLowerCase().includes(lowerQuery) || 
+      c.workAddress?.toLowerCase().includes(lowerQuery) || 
+      c.clientName?.toLowerCase().includes(lowerQuery)
+  );
+};
+
 const ServeAttempt: React.FC<ServeAttemptProps> = ({ 
   clients, 
   onComplete,
@@ -105,60 +119,77 @@ const ServeAttempt: React.FC<ServeAttemptProps> = ({
     const fetchAllCases = async () => {
       setIsLoadingCases(true);
       try {
-        const activeCases = [];
-        
+        console.log("Fetching all cases for all clients...");
+        const activeCases: ClientCase[] = [];
+
         for (const client of clients) {
           const clientCases = await appwrite.getClientCases(client.id);
-          
+          console.log(`Fetched cases for client ${client.name}:`, clientCases);
+
           for (const caseItem of clientCases) {
-            if (caseItem.status !== 'Closed') {
+            if (caseItem.status !== "Closed") {
               activeCases.push({
-                caseNumber: caseItem.caseNumber,
-                caseName: caseItem.caseName,
-                homeAddress: caseItem.homeAddress,
-                workAddress: caseItem.workAddress,
+                caseNumber: caseItem.case_number,
+                caseName: caseItem.case_name,
+                homeAddress: caseItem.home_address,
+                workAddress: caseItem.work_address,
                 clientId: client.id,
-                clientName: client.name
+                clientName: client.name,
               });
             }
           }
         }
-        
+
+        console.log("Active cases across all clients:", activeCases);
         setAllCases(activeCases);
       } catch (error) {
         console.error("Error fetching all cases:", error);
+        toast({
+          title: "Error",
+          description: "Failed to load cases",
+          variant: "destructive",
+        });
       } finally {
         setIsLoadingCases(false);
       }
     };
-    
+
     fetchAllCases();
   }, [clients]);
 
   useEffect(() => {
     if (selectedClient?.id) {
-      const fetchCases = async () => {
+      const fetchClientCases = async () => {
         setIsLoadingCases(true);
         try {
+          console.log(`Fetching cases for selected client ${selectedClient.name}...`);
           const clientCases = await appwrite.getClientCases(selectedClient.id);
-          const activeCases = clientCases.filter(caseItem => caseItem.status !== 'Closed').map(caseItem => ({
-            caseNumber: caseItem.caseNumber,
-            caseName: caseItem.caseName,
-            homeAddress: caseItem.homeAddress,
-            workAddress: caseItem.workAddress,
-            clientId: selectedClient.id,
-            clientName: selectedClient.name
-          }));
-          
+          const activeCases = clientCases
+            .filter((caseItem) => caseItem.status !== "Closed")
+            .map((caseItem) => ({
+              caseNumber: caseItem.case_number,
+              caseName: caseItem.case_name,
+              homeAddress: caseItem.home_address,
+              workAddress: caseItem.work_address,
+              clientId: selectedClient.id,
+              clientName: selectedClient.name,
+            }));
+
+          console.log(`Active cases for client ${selectedClient.name}:`, activeCases);
           setClientCases(activeCases);
         } catch (error) {
-          console.error("Error fetching cases:", error);
+          console.error("Error fetching client cases:", error);
+          toast({
+            title: "Error",
+            description: "Failed to load client cases",
+            variant: "destructive",
+          });
         } finally {
           setIsLoadingCases(false);
         }
       };
-      
-      fetchCases();
+
+      fetchClientCases();
     } else {
       setClientCases([]);
     }
@@ -179,37 +210,22 @@ const ServeAttempt: React.FC<ServeAttemptProps> = ({
   }, [selectedClient, selectedCase]);
 
   const filteredCases = useMemo(() => {
-    if (step === "select" && !selectedClient) {
-      if (!addressSearchTerm) return allCases;
-      
-      const searchTermLower = addressSearchTerm.toLowerCase();
-      return allCases.filter(c => {
-        const homeMatch = c.homeAddress?.toLowerCase().includes(searchTermLower);
-        const workMatch = c.workAddress?.toLowerCase().includes(searchTermLower);
-        const caseNameMatch = c.caseName?.toLowerCase().includes(searchTermLower);
-        const caseNumberMatch = c.caseNumber.toLowerCase().includes(searchTermLower);
-        const clientNameMatch = c.clientName?.toLowerCase().includes(searchTermLower);
-        
-        return homeMatch || workMatch || caseNameMatch || caseNumberMatch || clientNameMatch;
-      });
-    } 
-    else {
-      if (!addressSearchTerm) return clientCases;
-      
-      const searchTermLower = addressSearchTerm.toLowerCase();
-      return clientCases.filter(c => {
-        const homeMatch = c.homeAddress?.toLowerCase().includes(searchTermLower);
-        const workMatch = c.workAddress?.toLowerCase().includes(searchTermLower);
-        const caseNameMatch = c.caseName?.toLowerCase().includes(searchTermLower);
-        const caseNumberMatch = c.caseNumber.toLowerCase().includes(searchTermLower);
-        
-        return homeMatch || workMatch || caseNameMatch || caseNumberMatch;
-      });
-    }
-  }, [addressSearchTerm, clientCases, allCases, selectedClient, step]);
+    const casesToFilter = selectedClient ? clientCases : allCases;
+    if (!addressSearchTerm.trim()) return casesToFilter;
+
+    const lowerQuery = addressSearchTerm.toLowerCase();
+    return casesToFilter.filter(
+      (c) =>
+        c.caseNumber?.toLowerCase().includes(lowerQuery) ||
+        c.caseName?.toLowerCase().includes(lowerQuery) ||
+        c.homeAddress?.toLowerCase().includes(lowerQuery) ||
+        c.workAddress?.toLowerCase().includes(lowerQuery) ||
+        c.clientName?.toLowerCase().includes(lowerQuery)
+    );
+  }, [addressSearchTerm, clientCases, allCases, selectedClient]);
 
   const handleClientChange = (clientId: string) => {
-    const client = clients.find(c => c.id === clientId);
+    const client = clients.find((c) => c.id === clientId);
     setSelectedClient(client || null);
     form.setValue("clientId", clientId);
     form.setValue("caseNumber", "");

@@ -38,6 +38,28 @@ export const appwrite = {
   DOCUMENTS_COLLECTION_ID,
   STORAGE_BUCKET_ID,
 
+  // Add the setupRealtimeSubscription function
+  setupRealtimeSubscription(callback) {
+    try {
+      console.log("Setting up realtime subscription for Appwrite");
+      
+      // Subscribe to all collections
+      const unsubscribe = client.subscribe([
+        `databases.${DATABASE_ID}.collections.${CLIENTS_COLLECTION_ID}.documents`,
+        `databases.${DATABASE_ID}.collections.${SERVE_ATTEMPTS_COLLECTION_ID}.documents`,
+        `databases.${DATABASE_ID}.collections.${CASES_COLLECTION_ID}.documents`,
+        `databases.${DATABASE_ID}.collections.${DOCUMENTS_COLLECTION_ID}.documents`,
+      ], (response) => {
+        callback(response);
+      });
+      
+      return unsubscribe;
+    } catch (error) {
+      console.error("Error setting up Appwrite realtime subscription:", error);
+      return () => {}; // Return empty cleanup function
+    }
+  },
+
   // Utility to check if Appwrite is properly configured
   isAppwriteConfigured() {
     return !!APPWRITE_CONFIG.projectId && !!APPWRITE_CONFIG.endpoint;
@@ -195,6 +217,12 @@ export const appwrite = {
     try {
       const serveId = serveData.id || ID.unique();
       const now = new Date().toISOString();
+
+      console.log("Creating serve attempt with data:", {
+        ...serveData,
+        timestamp: serveData.timestamp ? serveData.timestamp.toISOString() : now,
+      });
+
       const response = await databases.createDocument(
         DATABASE_ID,
         SERVE_ATTEMPTS_COLLECTION_ID,
@@ -202,19 +230,18 @@ export const appwrite = {
         {
           client_id: serveData.clientId,
           case_number: serveData.caseNumber || "",
-          date: serveData.date,
-          time: serveData.time,
           address: serveData.address,
           notes: serveData.notes,
-          status: serveData.status || 'attempted',
+          status: serveData.status || "attempted",
           image_data: serveData.imageData || null,
           coordinates: serveData.coordinates || null,
+          timestamp: serveData.timestamp ? serveData.timestamp.toISOString() : now, // Use timestamp instead of date/time
           created_at: now,
         }
       );
       return response;
     } catch (error) {
-      console.error('Error creating serve attempt:', error);
+      console.error("Error creating serve attempt:", error);
       throw error;
     }
   },

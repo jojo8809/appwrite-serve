@@ -347,28 +347,44 @@ const AnimatedRoutes = () => {
 
   const addServe = async (serveData) => {
     try {
+      console.log("Adding serve attempt with data:", serveData);
+      
+      // If timestamp is Date object, convert to ISO string for debugging clarity
+      const debugData = {
+        ...serveData,
+        timestamp: serveData.timestamp instanceof Date 
+          ? serveData.timestamp.toISOString() 
+          : serveData.timestamp
+      };
+      console.log("Formatted serve data:", debugData);
+      
       const newServe = await appwrite.createServeAttempt({
         ...serveData,
         date: serveData.timestamp.toLocaleDateString(),
         time: serveData.timestamp.toLocaleTimeString(),
+        // timestamp is already set in serveData from NewServe.tsx
       });
+      
       const formattedServe = {
         id: newServe.$id,
-        clientId: newServe.clientId,
-        imageData: newServe.imageData,
+        clientId: newServe.client_id,
+        imageData: newServe.image_data,
         coordinates: newServe.coordinates,
         notes: newServe.notes,
         status: newServe.status,
-        timestamp: new Date(newServe.created_at || new Date()),
+        timestamp: new Date(newServe.timestamp || newServe.created_at),
         attemptNumber: serveData.attemptNumber,
-        caseNumber: newServe.caseNumber,
+        caseNumber: newServe.case_number,
       };
+      
       setServes(prev => [...prev, formattedServe]);
+      
       toast({
         title: "Serve recorded",
         description: "Service attempt has been saved successfully",
         variant: "success",
       });
+      
       return true;
     } catch (error) {
       console.error("Error creating serve attempt:", error);

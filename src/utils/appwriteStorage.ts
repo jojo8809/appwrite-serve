@@ -86,8 +86,17 @@ export async function deleteClientDocument(id: string, filePath: string): Promis
 
 export async function getClientCases(clientId: string): Promise<{ caseNumber: string; caseName?: string }[]> {
   try {
+    console.log("Fetching cases for client ID:", clientId);
     const cases = await appwrite.getClientCases(clientId);
-    return cases.map(caseItem => ({
+    console.log("Raw cases response:", cases);
+    
+    // Filter to include both Active and Pending cases
+    const availableCases = cases.filter(caseItem => 
+      caseItem.status === "Active" || caseItem.status === "Pending"
+    );
+    console.log("Available cases (Active + Pending):", availableCases);
+
+    return availableCases.map(caseItem => ({
       caseNumber: caseItem.case_number,
       caseName: caseItem.case_name
     }));

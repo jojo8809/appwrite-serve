@@ -26,9 +26,7 @@ import { isGeolocationCoordinates } from "@/utils/gps";
 import { ACTIVE_BACKEND, BACKEND_PROVIDER } from "@/config/backendConfig";
 import { supabase } from "@/lib/supabase";
 import { useToast } from "@/hooks/use-toast";
-import { Resend } from "resend";
-
-const resend = new Resend("re_cKhSe1Ao_7Wyvkcfq6AjC8Ccorq4GeoQA");
+import { debugImageData } from "@/utils/imageUtils";
 
 interface EditServeDialogProps {
   serve: ServeAttemptData;
@@ -66,16 +64,19 @@ export default function EditServeDialog({ serve, open, onOpenChange, onSave }: E
 
   useEffect(() => {
     const fetchClientEmail = async () => {
+      console.log("Fetching client email for client ID:", serve.clientId);
       if (serve.clientId) {
         try {
           if (ACTIVE_BACKEND === BACKEND_PROVIDER.APPWRITE) {
             const clients = await appwrite.getClients();
-            const client = clients.find(c => c.$id === serve.clientId);
+            const client = clients.find(c => c.$id === serve.clientId || c.id === serve.clientId);
 
             if (client) {
               setClientEmail(client.email);
               setClientName(client.name || "Client");
-              console.log("Fetched client email:", client.email); // Log the client email
+              console.log("Fetched client email:", client.email);
+            } else {
+              console.warn("Client not found in getClients() response");
             }
           } else {
             const { data, error } = await supabase
@@ -87,7 +88,7 @@ export default function EditServeDialog({ serve, open, onOpenChange, onSave }: E
             if (!error && data) {
               setClientEmail(data.email);
               setClientName(data.name || "Client");
-              console.log("Fetched client email from Supabase:", data.email); // Log the client email
+              console.log("Fetched client email from Supabase:", data.email);
             }
           }
         } catch (error) {
@@ -106,6 +107,13 @@ export default function EditServeDialog({ serve, open, onOpenChange, onSave }: E
 
     setIsSaving(true);
     try {
+      console.log("Saving serve update:", {
+        id: serve.id,
+        status,
+        caseNumber,
+        notes
+      });
+
       const updatedServe: ServeAttemptData = {
         ...serve,
         status,
@@ -114,8 +122,20 @@ export default function EditServeDialog({ serve, open, onOpenChange, onSave }: E
       };
 
       const success = await onSave(updatedServe);
+      console.log("Save result:", success);
 
       if (success) {
+        console.log("Sending email notification for updated serve...");
+        
+        // Debug the image data if available
+        if (serve.imageData) {
+          console.log("Serve has image data, including in email:");
+          debugImageData(serve.imageData);
+        } else {
+          console.log("Serve doesn't have image data for email");
+        }
+        
+        // Create email body
         const emailBody = createUpdateNotificationEmail(
           clientName,
           caseNumber,
@@ -125,21 +145,31 @@ export default function EditServeDialog({ serve, open, onOpenChange, onSave }: E
           notes
         );
 
-        const recipients = clientEmail
-          ? [clientEmail, "info@justlegalsolutions.org"]
-          : ["info@justlegalsolutions.org"];
+        // Set up recipients - always include business email
+        const businessEmail = "info@justlegalsolutions.org";
+        const recipients = [businessEmail];
+        
+        // Add client email if available
+        if (clientEmail && clientEmail !== businessEmail) {
+          recipients.push(clientEmail);
+        }
 
-        const emailResult = await sendEmail({
-          to: recipients,
-          subject: `Serve Attempt Updated - ${caseNumber}`,
-          body: emailBody,
-          html: emailBody,
-        });
+        console.log(`Sending email to ${recipients.length} recipients, has image: ${!!serve.imageData}`);
 
-        if (emailResult.success) {
-          console.log("Email sent successfully:", emailResult.message);
-        } else {
-          console.error("Failed to send email:", emailResult.message);
+        // Send email with image if available
+        try {
+          const emailResult = await sendEmail({
+            to: recipients,
+            subject: `Serve Attempt Updated - ${caseNumber}`,
+            body: emailBody,
+            html: emailBody,
+            imageData: serve.imageData, // Will be uploaded to storage
+            imageFormat: 'jpeg'
+          });
+
+          console.log("Email sending result:", emailResult);
+        } catch (emailError) {
+          console.error("Error sending email:", emailError);
         }
 
         onOpenChange(false);

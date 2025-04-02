@@ -34,6 +34,7 @@ import { appwrite } from "@/lib/appwrite";
 import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from "@/components/ui/command";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { useIsMobile } from "@/hooks/use-mobile";
+import { debugImageData } from "@/utils/imageUtils";
 
 export interface ServeAttemptData {
   id?: string;
@@ -292,6 +293,10 @@ const ServeAttempt: React.FC<ServeAttemptProps> = ({
     try {
       const imageWithGPS = embedGpsIntoImage(capturedImage, location);
 
+      // Debug the image data for troubleshooting
+      console.log("Image with GPS data properties:");
+      debugImageData(imageWithGPS);
+
       // Format coordinates as a string
       const formattedCoordinates = `${location.latitude},${location.longitude}`;
 
@@ -326,9 +331,9 @@ const ServeAttempt: React.FC<ServeAttemptProps> = ({
 
       // Now send the email notification directly here
       try {
-        console.log("Sending email notification");
+        console.log("Preparing to send notification email with image");
         
-        // Create email body
+        // Create email body without embedding the image
         const emailBody = createServeEmailBody(
           serveData.clientName || "Unknown Client",
           address,
@@ -339,31 +344,27 @@ const ServeAttempt: React.FC<ServeAttemptProps> = ({
           serveData.caseNumber || "Unknown Case"
         );
         
-        // Create recipients array - ALWAYS include your business email
+        // Set up recipients
         const businessEmail = "info@justlegalsolutions.org";
         const recipients = [businessEmail];
         
-        // Add client email if available and not the same as business email
         if (clientEmail && clientEmail !== businessEmail) {
           recipients.push(clientEmail);
         }
         
-        // Log for debugging
-        console.log("Sending notification emails to:", recipients);
+        console.log(`Sending email to ${recipients.length} recipients with photo attachment`);
         
-        // Send the email to all recipients
+        // Include the image as an attachment using new approach
         const emailResult = await sendEmail({
           to: recipients,
           subject: `New Serve Attempt Created - ${serveData.caseNumber || "Unknown Case"}`,
           body: emailBody,
           html: emailBody,
+          imageData: imageWithGPS, // Will be uploaded to storage
+          imageFormat: 'jpeg'
         });
         
-        if (emailResult.success) {
-          console.log("Email sent successfully to all recipients");
-        } else {
-          console.error("Failed to send email notification:", emailResult.message);
-        }
+        console.log("Email sending result:", emailResult);
       } catch (emailError) {
         console.error("Error sending notification email:", emailError);
         // Continue with success even if email fails

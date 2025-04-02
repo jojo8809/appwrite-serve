@@ -8,9 +8,11 @@ import { ClientData } from "@/components/ClientForm";
 export function normalizeServeData(serve: any): ServeAttemptData | null {
   if (!serve) return null;
 
-  const id = serve.$id || serve.id || null; // Map $id to id
+  // Use $id if available; otherwise use id
+  const id = serve.$id || serve.id;
   if (!id) {
-    console.error("Cannot normalize serve data without an ID:", serve);
+    // Instead of logging an error, warn and skip this record
+    console.warn("Skipping serve data without an ID:", serve);
     return null;
   }
 
@@ -23,9 +25,7 @@ export function normalizeServeData(serve: any): ServeAttemptData | null {
     coordinates: serve.coordinates || null,
     notes: serve.notes || "",
     status: serve.status || "unknown",
-    timestamp: serve.timestamp
-      ? new Date(serve.timestamp)
-      : new Date(),
+    timestamp: serve.timestamp ? new Date(serve.timestamp) : new Date(),
     attemptNumber: serve.attemptNumber || serve.attempt_number || 1,
     imageData: serve.imageData || serve.image_data || null,
   };
@@ -36,21 +36,8 @@ export function normalizeServeData(serve: any): ServeAttemptData | null {
  */
 export function normalizeServeDataArray(serves: any[]) {
   return serves
-    .filter((serve) => {
-      if (!serve.id && !serve.$id) {
-        console.error("Cannot normalize serve data without an ID:", serve);
-        return false; // Skip entries without an ID
-      }
-      return true;
-    })
-    .map((serve) => ({
-      id: serve.id || serve.$id, // Use `$id` if `id` is missing
-      clientId: serve.clientId || "unknown",
-      date: serve.date || "unknown",
-      time: serve.time || "unknown",
-      address: serve.address || "unknown",
-      ...serve,
-    }));
+    .map((serve) => normalizeServeData(serve))
+    .filter((serve) => serve !== null);
 }
 
 /**

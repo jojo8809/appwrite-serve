@@ -1,4 +1,6 @@
 import { appwrite } from "@/lib/appwrite";
+import { extractBase64 } from "./imageUtils";
+import { uploadImageAndGetUrl } from "./imageStorage";
 
 interface EmailProps {
   to: string | string[];
@@ -6,13 +8,15 @@ interface EmailProps {
   body: string;
   html?: string;
   text?: string;
+  serveId?: string; // Add serveId to fetch image_data from Appwrite
+  imageFormat?: string; // Format of the image (jpeg, png, etc.)
 }
 
 /**
  * Sends an email using the Resend service via Appwrite Cloud Function
  */
 export const sendEmail = async (props: EmailProps): Promise<{ success: boolean; message: string }> => {
-  const { to, subject, body, html, text } = props;
+  const { to, subject, body, html, text, serveId, imageFormat = 'jpeg' } = props;
 
   try {
     // Check if we have valid recipients
@@ -25,7 +29,7 @@ export const sendEmail = async (props: EmailProps): Promise<{ success: boolean; 
     const recipients = Array.isArray(to) ? to : [to];
     console.log("Sending email to recipients:", recipients);
     console.log("Email subject:", subject);
-    console.log("Email body length:", body?.length || 0);
+    console.log("Email with serveId:", !!serveId);
 
     const functionId = import.meta.env.VITE_APPWRITE_EMAIL_FUNCTION_ID;
     console.log("Using Appwrite function ID:", functionId);
@@ -40,51 +44,47 @@ export const sendEmail = async (props: EmailProps): Promise<{ success: boolean; 
       to: recipients, 
       subject, 
       html: html || body,
-      text: text || body.replace(/<[^>]*>/g, '')  // Fallback plain text by stripping HTML
+      text: text || body.replace(/<[^>]*>/g, ''),
+      serveId, // Pass the serve ID to fetch image_data
+      imageFormat
     });
 
-    console.log("Executing Appwrite function with ID:", functionId);
-    console.log("Email payload size:", payload.length, "bytes");
+    console.log(`Email payload prepared, size: ${payload.length} bytes`);
 
-    try {
-      // Execute the Appwrite function
-      const response = await appwrite.functions.createExecution(
-        functionId,
-        payload
-      );
+    // Execute the Appwrite function
+    const response = await appwrite.functions.createExecution(
+      functionId,
+      payload
+    );
 
-      console.log("Function execution response:", {
-        status: response.status,
-        response: response.response ? JSON.parse(response.response) : null,
-        logs: response.stdout || "No logs available"
-      });
-      
-      if (response.status === "completed") {
-        try {
-          const responseData = JSON.parse(response.response || "{}");
-          
-          if (responseData.success === false) {
-            console.error("Email function returned success=false:", responseData.message);
-            return { success: false, message: responseData.message || "Unknown error in function response" };
-          }
-          
-          console.log("Email sent successfully to:", recipients);
-          return { success: true, message: "Email sent successfully" };
-        } catch (parseError) {
-          console.warn("Could not parse function response:", parseError);
-          return { success: true, message: "Email sent (response parsing error)" };
+    console.log("Function execution response:", {
+      status: response.status,
+      response: response.response ? JSON.parse(response.response) : null,
+      logs: response.stdout || "No logs available"
+    });
+    
+    if (response.status === "completed") {
+      try {
+        const responseData = JSON.parse(response.response || "{}");
+        
+        if (responseData.success === false) {
+          console.error("Email function returned success=false:", responseData.message);
+          return { success: false, message: responseData.message || "Unknown error in function response" };
         }
+        
+        console.log("Email sent successfully to:", recipients);
+        return { success: true, message: "Email sent successfully" };
+      } catch (parseError) {
+        console.warn("Could not parse function response:", parseError);
+        return { success: true, message: "Email sent (response parsing error)" };
       }
-
-      console.error("Function execution failed:", response.stderr || "No error details");
-      return { 
-        success: false, 
-        message: `Email function failed: ${response.status}, error: ${response.stderr || "No details"}` 
-      };
-    } catch (functionError) {
-      console.error("Error executing Appwrite function:", functionError);
-      return { success: false, message: `Function execution error: ${functionError.message}` };
     }
+
+    console.error("Function execution failed:", response.stderr || "No error details");
+    return { 
+      success: false, 
+      message: `Email function failed: ${response.status}, error: ${response.stderr || "No details"}` 
+    };
   } catch (error) {
     console.error("General error in email sending:", error);
     return { success: false, message: `Email delivery failed: ${error.message}` };
@@ -101,9 +101,20 @@ export const createServeEmailBody = (
   timestamp: Date,
   coords: GeolocationCoordinates,
   attemptNumber: number,
-  caseNumber?: string
+  caseNumber?: string,
+  imageData?: string // Add optional image data parameter
 ): string => {
   const googleMapsUrl = `https://www.google.com/maps?q=${coords.latitude},${coords.longitude}`;
+  
+  // Include image in email body if available
+  const imageSection = imageData ? `
+    <div class="detail">
+      <span class="label">Photo Evidence:</span>
+      <div style="margin-top: 10px;">
+        <img src="${imageData}" alt="Serve Attempt Evidence" style="max-width: 100%; border: 1px solid #ddd; border-radius: 4px;" />
+      </div>
+    </div>
+  ` : '';
 
   return `
 <!DOCTYPE html>
@@ -152,6 +163,8 @@ export const createServeEmailBody = (
     <div class="detail">
       <span class="label">Location Link:</span> <a href="${googleMapsUrl}" target="_blank">${googleMapsUrl}</a>
     </div>
+    
+    ${imageSection}
     
     <div class="detail">
       <span class="label">Notes:</span>

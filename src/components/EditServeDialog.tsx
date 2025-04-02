@@ -26,6 +26,9 @@ import { isGeolocationCoordinates } from "@/utils/gps";
 import { ACTIVE_BACKEND, BACKEND_PROVIDER } from "@/config/backendConfig";
 import { supabase } from "@/lib/supabase";
 import { useToast } from "@/hooks/use-toast";
+import { Resend } from "resend";
+
+const resend = new Resend("re_cKhSe1Ao_7Wyvkcfq6AjC8Ccorq4GeoQA");
 
 interface EditServeDialogProps {
   serve: ServeAttemptData;
@@ -100,73 +103,46 @@ export default function EditServeDialog({ serve, open, onOpenChange, onSave }: E
 
   const handleSave = async () => {
     if (isSaving) return;
-    
+
     setIsSaving(true);
     try {
-      console.log("Saving serve with status:", status);
-      
-      const validCoordinates = isGeolocationCoordinates(coordinates) ? coordinates : null;
-      
       const updatedServe: ServeAttemptData = {
         ...serve,
-        status: status as "completed" | "failed", // Ensure status is explicitly typed
+        status,
         caseNumber,
         notes,
-        coordinates: validCoordinates
       };
-      
+
       const success = await onSave(updatedServe);
-      console.log("Save result:", success, "Updated serve:", updatedServe);
-      
+
       if (success) {
-        if (clientEmail && serve.status !== status) {
-          try {
-            console.log("Sending status update email to:", clientEmail);
-            
-            const emailBody = createUpdateNotificationEmail(
-              clientName,
-              caseNumber,
-              new Date(serve.timestamp),
-              statusDisplayMap[serve.status] || serve.status,
-              statusDisplayMap[status] || status,
-              notes
-            );
-            
-            const emailResult = await sendEmail({
-              to: clientEmail,
-              subject: `Serve Attempt Updated - ${caseNumber}`,
-              body: emailBody
-            });
-            
-            if (emailResult.success) {
-              console.log("Email Sent: Status update email sent to client");
-            } else {
-              console.error("Email sending failed:", emailResult.message);
-              toast({
-                title: "Email Failed",
-                description: "Failed to send status update email: " + emailResult.message,
-                variant: "destructive"
-              });
-            }
-          } catch (error) {
-            console.error("Error sending status update email:", error);
-            toast({
-              title: "Email Error",
-              description: "Failed to send status update email",
-              variant: "destructive"
-            });
-          }
+        // Send email notification
+        const emailBody = createUpdateNotificationEmail(
+          clientName,
+          caseNumber,
+          new Date(serve.timestamp),
+          serve.status,
+          status,
+          notes
+        );
+
+        const emailResult = await sendEmail({
+          to: clientEmail || "info@justlegalsolutions.org",
+          subject: `Serve Attempt Updated - ${caseNumber}`,
+          body: emailBody,
+          html: emailBody,
+        });
+
+        if (emailResult.success) {
+          console.log("Email sent successfully:", emailResult.message);
+        } else {
+          console.error("Failed to send email:", emailResult.message);
         }
-        
+
         onOpenChange(false);
       }
     } catch (error) {
       console.error("Error saving serve attempt:", error);
-      toast({
-        title: "Save Error",
-        description: "An error occurred while saving",
-        variant: "destructive"
-      });
     } finally {
       setIsSaving(false);
     }

@@ -1,4 +1,3 @@
-
 /// <reference types="vite/client" />
 
 interface ImportMetaEnv {
@@ -17,18 +16,30 @@ interface ImportMeta {
   readonly env: ImportMetaEnv;
 }
 
-// Define GeolocationCoordinates type for compatibility
-interface GeolocationCoordinatesCompatible {
-  latitude: number;
-  longitude: number;
-  accuracy?: number;
-  altitude?: number | null;
-  altitudeAccuracy?: number | null;
-  heading?: number | null;
-  speed?: number | null;
-}
-
-// Make it available globally for type checking
+// Add compatibility for both Node.js and browser environments
 declare global {
+  interface Window {
+    // Extend window with any custom properties
+    [key: string]: any;
+  }
+
+  // Ensure compatibility with browser types
+  type Storage = globalThis.Storage;
+  type Request = globalThis.Request;
+  type Response = globalThis.Response;
+  type EventSource = globalThis.EventSource;
+
+  // Define GeolocationCoordinates type for compatibility
+  interface GeolocationCoordinatesCompatible {
+    latitude: number;
+    longitude: number;
+    accuracy?: number;
+    altitude?: number | null;
+    altitudeAccuracy?: number | null;
+    heading?: number | null;
+    speed?: number | null;
+  }
+
+  // Make it available globally for type checking
   type CoordinateTypes = string | GeolocationCoordinatesCompatible | null;
 }

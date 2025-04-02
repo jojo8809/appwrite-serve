@@ -1,4 +1,3 @@
-
 import { ServeAttemptData } from "@/components/ServeAttempt";
 import { ClientData } from "@/components/ClientForm";
 
@@ -9,9 +8,7 @@ import { ClientData } from "@/components/ClientForm";
 export function normalizeServeData(serve: any): ServeAttemptData | null {
   if (!serve) return null;
 
-  // Explicitly check for $id first, then id
-  const id = serve.$id || serve.id || null;
-
+  const id = serve.$id || serve.id || null; // Map $id to id
   if (!id) {
     console.error("Cannot normalize serve data without an ID:", serve);
     return null;
@@ -37,32 +34,24 @@ export function normalizeServeData(serve: any): ServeAttemptData | null {
 /**
  * Normalize an array of serve data objects
  */
-export const normalizeServeDataArray = (serves) => {
-  if (!serves || !Array.isArray(serves)) {
-    console.warn("normalizeServeDataArray received invalid data:", serves);
-    return [];
-  }
-
-  return serves.map((serve) => {
-    // Ensure `id` is assigned from `$id` first
-    const id = serve.$id || serve.id || null;
-
-    if (!id) {
-      console.error("Cannot normalize serve data without an ID:", serve);
-      return null; // Skip invalid entries
-    }
-
-    // Create a new object with normalized data
-    return {
+export function normalizeServeDataArray(serves: any[]) {
+  return serves
+    .filter((serve) => {
+      if (!serve.id && !serve.$id) {
+        console.error("Cannot normalize serve data without an ID:", serve);
+        return false; // Skip entries without an ID
+      }
+      return true;
+    })
+    .map((serve) => ({
+      id: serve.id || serve.$id, // Use `$id` if `id` is missing
+      clientId: serve.clientId || "unknown",
+      date: serve.date || "unknown",
+      time: serve.time || "unknown",
+      address: serve.address || "unknown",
       ...serve,
-      id, // Assign the normalized `id`
-      clientId: serve.clientId || serve.client_id || "unknown",
-      clientName: serve.clientName || serve.client_name || "Unknown Client",
-      date: serve.timestamp ? new Date(serve.timestamp).toLocaleDateString() : undefined,
-      time: serve.timestamp ? new Date(serve.timestamp).toLocaleTimeString() : undefined,
-    };
-  }).filter(Boolean); // Remove null entries
-};
+    }));
+}
 
 /**
  * Adds client names to serve attempts based on clientId

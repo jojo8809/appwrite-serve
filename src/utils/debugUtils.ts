@@ -1,4 +1,3 @@
-
 // Import any necessary types or utilities here
 import { appwrite } from '@/lib/appwrite';
 
@@ -18,7 +17,7 @@ interface ClientData {
 declare global {
   interface Window {
     inspectAppwriteConfig: () => void;
-    fixClientIdsInServeAttempts: () => Promise<{ message: string; fixed: number }>;
+    fixClientIdsInServeAttempts: () => Promise<void>;
     testCreateClient: () => Promise<{ success: boolean; client?: any; error?: any }>;
     testDeleteClient: (clientId: string) => void;
     listClients: () => Promise<{ success: boolean; clients?: any[]; error?: any }>;
@@ -35,50 +34,95 @@ export function initializeDebugTools() {
       endpoint: import.meta.env.VITE_APPWRITE_ENDPOINT,
       projectId: import.meta.env.VITE_APPWRITE_PROJECT_ID,
       databaseId: import.meta.env.VITE_APPWRITE_DATABASE_ID,
-      clientsCollectionId: import.meta.env.VITE_APPWRITE_CLIENTS_COLLECTION_ID,
       serveAttemptsCollectionId: import.meta.env.VITE_APPWRITE_SERVE_ATTEMPTS_COLLECTION_ID,
-      clientCasesCollectionId: import.meta.env.VITE_APPWRITE_CLIENT_CASES_COLLECTION_ID,
-      clientDocumentsCollectionId: import.meta.env.VITE_APPWRITE_CLIENT_DOCUMENTS_COLLECTION_ID,
-      storageBucketId: import.meta.env.VITE_APPWRITE_STORAGE_BUCKET_ID,
-      emailFunctionId: import.meta.env.VITE_APPWRITE_EMAIL_FUNCTION_ID,
     });
   };
 
   // Add client data repair function to window object
   window.fixClientIdsInServeAttempts = async function() {
     try {
-      console.log('Attempting to fix client IDs in serve attempts...');
-      const serveAttempts = await appwrite.getServeAttempts();
-      let fixedCount = 0;
+      const databaseId = import.meta.env.VITE_APPWRITE_DATABASE_ID || "67eae6fe0020c6721531";
+      const collectionId = import.meta.env.VITE_APPWRITE_SERVE_ATTEMPTS_COLLECTION_ID || "67eae7ef8034c7ad35f6";
 
-      for (const serve of serveAttempts) {
-        if (!serve.client_id || serve.client_id === 'unknown') {
-          console.warn(`Serve attempt ${serve.$id} has an invalid client ID. Attempting to fix...`);
-          
-          // Fetch the first client as a default
-          const clients = await appwrite.getClients();
-          if (clients && clients.length > 0) {
-            const firstClientId = clients[0].$id;
-            console.log(`Updating serve attempt ${serve.$id} with client ID: ${firstClientId}`);
-            await appwrite.databases.updateDocument(
-              appwrite.DATABASE_ID,
-              appwrite.SERVE_ATTEMPTS_COLLECTION_ID,
-              serve.$id,
-              { client_id: firstClientId }
-            );
-            fixedCount++;
-          } else {
-            console.warn('No clients found. Cannot fix serve attempts.');
-            return { message: 'No clients found. Cannot fix serve attempts.', fixed: 0 };
-          }
-        }
+      console.log("Debug: databaseId =", databaseId);
+      console.log("Debug: collectionId =", collectionId);
+      
+      // Log the appwrite object structure to help debug
+      console.log("Appwrite client structure:", Object.keys(appwrite));
+      console.log("Appwrite databases structure:", appwrite.databases ? Object.keys(appwrite.databases) : "No databases property");
+      
+      if (!databaseId || !collectionId) {
+        throw new Error("Missing Appwrite databaseId or collectionId in environment variables.");
       }
 
-      console.log(`Fixed ${fixedCount} serve attempts with invalid client IDs.`);
-      return { message: `Fixed ${fixedCount} serve attempts with invalid client IDs.`, fixed: fixedCount };
+      // Fetch serve attempts
+      console.log("Fetching serve attempts...");
+      const serves = await appwrite.getServeAttempts();
+      console.log(`Found ${serves.length} serve attempts`);
+      
+      if (!serves || serves.length === 0) {
+        return;
+      }
+      
+      // Check if updateDocument is available in appwrite.databases
+      if (!appwrite.databases || typeof appwrite.databases.updateDocument !== 'function') {
+        console.error("Error: appwrite.databases.updateDocument is not a function");
+        console.log("Attempting to use alternative methods...");
+        
+        // Try to use the client directly instead
+        if (appwrite.client && appwrite.client.databases) {
+          console.log("Using appwrite.client.databases instead");
+          for (const serve of serves) {
+            if (!serve.id && !serve.$id) {
+              console.error("Skipping serve attempt with missing ID:", serve);
+              continue;
+            }
+            
+            const documentId = serve.id || serve.$id;
+            const updatedServe = { ...serve, clientId: serve.clientId || "unknown" };
+            
+            console.log(`Updating serve attempt ${documentId} using client.databases...`);
+            await appwrite.client.databases.updateDocument(databaseId, collectionId, documentId, updatedServe);
+          }
+          return;
+        }
+      }
+      
+      // Use the standard method if available
+      for (const serve of serves) {
+        if (!serve.id && !serve.$id) {
+          console.error("Skipping serve attempt with missing ID:", serve);
+          continue;
+        }
+        
+        const documentId = serve.id || serve.$id;
+        const updatedServe = { ...serve, clientId: serve.clientId || "unknown" };
+        
+        console.log(`Updating serve attempt with ID: ${documentId}`);
+        try {
+          // Use a more direct approach to call the Appwrite SDK
+          await appwrite.databases.updateDocument(
+            databaseId,
+            collectionId,
+            documentId,
+            updatedServe
+          );
+          console.log(`Successfully updated serve attempt: ${documentId}`);
+        } catch (updateError) {
+          console.error(`Error updating serve attempt ${documentId}:`, updateError);
+        }
+      }
     } catch (error) {
-      console.error('Error fixing client IDs in serve attempts:', error);
-      return { message: `Error fixing client IDs: ${error.message}`, fixed: 0 };
+      console.error("Error fixing client IDs in serve attempts:", error);
+      
+      // Additional debugging for the error
+      if (error.response) {
+        console.error("Error response:", error.response);
+      }
+      
+      if (error.message) {
+        console.error("Error message:", error.message);
+      }
     }
   };
 

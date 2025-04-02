@@ -4,104 +4,38 @@ interface EmailProps {
   to: string | string[];
   subject: string;
   body: string;
+  html?: string;
+  text?: string;
 }
 
 /**
  * Sends an email using the Resend service via Appwrite Cloud Function
  */
-export const sendEmail = async (props: EmailProps & { imageData?: string }): Promise<{ success: boolean; message: string }> => {
-  const { to, subject, body, imageData } = props;
+export const sendEmail = async (props: EmailProps): Promise<{ success: boolean; message: string }> => {
+  const { to, subject, body, html, text } = props;
 
   try {
-    console.log("Preparing to send email with the following details:", { to, subject, bodyLength: body.length });
+    console.log("Sending email via Appwrite function:", { to, subject });
 
-    let recipients: string[];
-    if (Array.isArray(to)) {
-      recipients = [...to].filter(email => !!email?.trim());
-    } else if (typeof to === "string" && to.trim()) {
-      recipients = [to.trim()];
-    } else {
-      console.error("Invalid recipient format:", to);
-      return { success: false, message: "Invalid recipient email format" };
+    const functionId = import.meta.env.VITE_APPWRITE_EMAIL_FUNCTION_ID;
+    if (!functionId) {
+      throw new Error("Appwrite email function ID is not configured");
     }
 
-    const businessEmail = "info@justlegalsolutions.org";
-    if (!recipients.includes(businessEmail)) {
-      recipients.push(businessEmail);
-    }
-
-    console.log("Final recipients list:", recipients);
-
-    const functionId = "67ec44660011c13116cd";
-    const functionResponse = await appwrite.functions.createExecution(
-      functionId,
-      JSON.stringify({ to: recipients, subject, body, imageData }),
-      false
-    );
-
-    console.log("Function response:", functionResponse);
-
-    if (functionResponse.status === "completed") {
-      return { success: true, message: "Email sent successfully via Appwrite function" };
-    }
-
-    throw new Error(`Function execution failed with status: ${functionResponse.status}`);
-  } catch (error) {
-    console.error("Error in email sending:", error);
-    return { success: false, message: `Email delivery failed: ${error.message}` };
-  }
-};
-
-/**
- * Resends an email using Appwrite Cloud Function
- */
-export const resendEmail = async (to: string, subject: string, body: string): Promise<boolean> => {
-  try {
-    // Add the business email
-    const recipients = Array.isArray(to) ? [...to] : [to];
-    const businessEmail = "info@justlegalsolutions.org";
-    if (!recipients.includes(businessEmail)) {
-      recipients.push(businessEmail);
-    }
-    
-    // Use the same function ID as in sendEmail
-    const functionId = '67ec44660011c13116cd';
-    
     const response = await appwrite.functions.createExecution(
       functionId,
-      JSON.stringify({ 
-        to: recipients, 
-        subject, 
-        body,
-        apiKey: "re_cKhSe1Ao_7Wyvkcfq6AjC8Ccorq4GeoQA"
-      })
+      JSON.stringify({ to, subject, html: html || body, text })
     );
-    
-    // Check if response exists and has a response property
-    if (!response || response.response === undefined) {
-      console.error("Empty or invalid response from Appwrite function:", response);
-      return false;
+
+    if (response.status === "completed") {
+      console.log("Email sent successfully via Appwrite function");
+      return { success: true, message: "Email sent successfully" };
     }
 
-    // Try to parse the response, handle invalid JSON
-    let result;
-    try {
-      result = JSON.parse(response.response);
-    } catch (parseError) {
-      console.error("Failed to parse function response:", response.response);
-      return false;
-    }
-    
-    if (result.success) {
-      console.log("Email resent successfully:", result.message);
-      return true;
-    } else {
-      console.error("Failed to resend email:", result.message);
-      return false;
-    }
+    throw new Error(`Function execution failed with status: ${response.status}`);
   } catch (error) {
-    console.error("Error calling resend-email function:", error);
-    return false;
+    console.error("Error sending email:", error);
+    return { success: false, message: `Email delivery failed: ${error.message}` };
   }
 };
 

@@ -418,14 +418,17 @@ export const appwrite = {
 
   async deleteServeAttempt(serveId) {
     try {
-      await databases.deleteDocument(
-        DATABASE_ID,
-        SERVE_ATTEMPTS_COLLECTION_ID,
-        serveId
-      );
+      if (!serveId) {
+        console.warn("Invalid serveId provided to deleteServeAttempt:", serveId);
+        return false; // Skip deletion if serveId is invalid
+      }
+
+      console.log(`Attempting to delete serve attempt with ID: ${serveId}`);
+      await databases.deleteDocument(DATABASE_ID, SERVE_ATTEMPTS_COLLECTION_ID, serveId);
+      console.log(`Successfully deleted serve attempt with ID: ${serveId}`);
       return true;
     } catch (error) {
-      console.error('Error deleting serve attempt:', error);
+      console.error(`Error deleting serve attempt ${serveId}:`, error);
       throw error;
     }
   },
@@ -662,14 +665,19 @@ export const appwrite = {
 
   async deleteClientDocument(docId, fileId) {
     try {
-      await databases.deleteDocument(
-        DATABASE_ID,
-        DOCUMENTS_COLLECTION_ID,
-        docId
-      );
-      if (fileId) {
+      console.log(`Attempting to delete document with ID: ${docId} and fileId: ${fileId}`);
+
+      // Validate fileId
+      if (fileId && (!/^[a-zA-Z0-9_]{1,36}$/.test(fileId) || fileId.startsWith('_'))) {
+        console.warn(`Invalid fileId: ${fileId}. Skipping file deletion.`);
+      } else if (fileId) {
         await storage.deleteFile(STORAGE_BUCKET_ID, fileId);
+        console.log(`Successfully deleted file with fileId: ${fileId}`);
       }
+
+      // Delete the document from the database
+      await databases.deleteDocument(DATABASE_ID, DOCUMENTS_COLLECTION_ID, docId);
+      console.log(`Successfully deleted document with ID: ${docId}`);
       return true;
     } catch (error) {
       console.error('Error deleting client document:', error);

@@ -25,6 +25,7 @@ import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
 import { initializeDebugTools } from '@/utils/debugUtils';
 import { normalizeServeDataArray } from "@/utils/dataNormalization";
+import { sendEmail, createDeleteNotificationEmail } from "@/utils/email";
 
 // Initialize debug tools for development
 if (process.env.NODE_ENV !== 'production') {
@@ -42,11 +43,11 @@ declare global {
 // Debug helper for older browser console support
 window.debugAppwrite = function() {
   console.log('Appwrite Config:', {
-    endpoint: import.meta.env.VITE_APPWRITE_ENDPOINT || APPWRITE_CONFIG.endpoint,
-    projectId: import.meta.env.VITE_APPWRITE_PROJECT_ID || APPWRITE_CONFIG.projectId,
-    databaseId: APPWRITE_CONFIG.databaseId,
-    collections: APPWRITE_CONFIG.collections,
-    storageBucket: APPWRITE_CONFIG.storageBucket,
+    endpoint: import.meta.env.VITE_APPWRITE_ENDPOINT || "https://cloud.appwrite.io/v1",
+    projectId: import.meta.env.VITE_APPWRITE_PROJECT_ID || "67ead974001245b7c6aa",
+    databaseId: import.meta.env.VITE_APPWRITE_DATABASE_ID || "67eae6fe0020c6721531", // Correct databaseId
+    clientsCollectionId: import.meta.env.VITE_APPWRITE_CLIENTS_COLLECTION_ID || "67eae70e000c042112c8",
+    serveAttemptsCollectionId: import.meta.env.VITE_APPWRITE_SERVE_ATTEMPTS_COLLECTION_ID || "67eae7ef8034c7ad35f6", // Correct collectionId
   });
   
   // Test API
@@ -294,55 +295,48 @@ const AnimatedRoutes = () => {
   const deleteClient = async (clientId) => {
     try {
       console.log(`Starting deletion process for client ${clientId}`);
-      
+
       // First delete serve attempts
       const serveAttempts = await appwrite.getServeAttempts();
       const clientServes = serveAttempts.filter(serve => serve.client_id === clientId);
       console.log(`Found ${clientServes.length} serve attempts to delete`);
-      
+
       for (const serve of clientServes) {
+        if (!serve.$id) {
+          console.warn("Skipping serve attempt with missing ID:", serve);
+          continue;
+        }
         await appwrite.deleteServeAttempt(serve.$id);
       }
-      
+
       // Delete documents
       const documents = await appwrite.getClientDocuments(clientId);
       console.log(`Found ${documents.length} documents to delete`);
-      
+
       for (const doc of documents) {
         await appwrite.deleteClientDocument(doc.$id, doc.file_path);
       }
-      
+
       // Delete the client
       console.log(`Deleting client ${clientId}`);
       await appwrite.deleteClient(clientId);
-      
+
       // Update local state
       setClients(prev => prev.filter(client => client.id !== clientId));
       setServes(prev => prev.filter(serve => serve.clientId !== clientId));
-      
+
       toast({
         title: "Client deleted",
         description: "Client and associated data have been removed",
         variant: "success",
       });
-      
-      // Refresh data
-      setTimeout(() => {
-        loadAppwriteData();
-      }, 500);
-      
-      return true;
     } catch (error) {
       console.error("Error deleting client:", error);
-      console.error("Error details:", error.response || error.message);
-      
       toast({
         title: "Error deleting client",
         description: error instanceof Error ? error.message : "Unknown error",
         variant: "destructive",
       });
-      
-      return false;
     }
   };
 
@@ -350,9 +344,8 @@ const AnimatedRoutes = () => {
     try {
       const newServe = await appwrite.createServeAttempt(serveData);
 
-      // Ensure the `id` field is properly assigned
       const formattedServe = {
-        id: newServe.$id, // Assign Appwrite's `$id` to `id`
+        id: newServe.$id, // Map $id to id
         ...newServe,
         timestamp: new Date(newServe.timestamp || new Date()),
       };
@@ -432,14 +425,39 @@ const AnimatedRoutes = () => {
 
   const deleteServe = async (serveId) => {
     try {
+      const serve = serves.find((s) => s.id === serveId);
+      if (!serve) throw new Error("Serve not found");
+
       await appwrite.deleteServeAttempt(serveId);
-      setServes(prev => prev.filter(serve => serve.id !== serveId));
+
+      setServes((prev) => prev.filter((s) => s.id !== serveId));
+
+      // Send email notification
+      const emailBody = createDeleteNotificationEmail(
+        serve.clientName,
+        serve.caseNumber,
+        new Date(serve.timestamp),
+        "Serve attempt was deleted by the admin."
+      );
+
+      const emailResult = await sendEmail({
+        to: serve.clientEmail || "info@justlegalsolutions.org",
+        subject: `Serve Attempt Deleted - ${serve.caseNumber}`,
+        body: emailBody,
+        html: emailBody,
+      });
+
+      if (emailResult.success) {
+        console.log("Email sent successfully:", emailResult.message);
+      } else {
+        console.error("Failed to send email:", emailResult.message);
+      }
+
       toast({
         title: "Serve deleted",
         description: "Service attempt has been removed",
         variant: "success",
       });
-      return true;
     } catch (error) {
       console.error("Error deleting serve attempt:", error);
       toast({
@@ -447,13 +465,19 @@ const AnimatedRoutes = () => {
         description: error instanceof Error ? error.message : "Unknown error",
         variant: "destructive",
       });
-      return false;
     }
   };
 
   const formatServesForDisplay = (serves) => {
-    console.log("Raw serves data in App before passing to History:", serves);
-    return normalizeServeDataArray(serves);
+    const normalizedServes = normalizeServeDataArray(serves);
+    return normalizedServes.map((serve) => ({
+      id: serve.id || "unknown", // Fallback to "unknown" if `id` is missing
+      clientId: serve.clientId || "unknown",
+      date: serve.date || "N/A",
+      time: serve.time || "N/A",
+      address: serve.address || "N/A",
+      ...serve,
+    }));
   };
 
   return (

@@ -10,13 +10,14 @@ interface EmailProps {
   text?: string;
   serveId?: string; // Add serveId to fetch image_data from Appwrite
   imageFormat?: string; // Format of the image (jpeg, png, etc.)
+  imageData?: string; // Add imageData to include image in email
 }
 
 /**
  * Sends an email using the Resend service via Appwrite Cloud Function
  */
 export const sendEmail = async (props: EmailProps): Promise<{ success: boolean; message: string }> => {
-  const { to, subject, body, html, text, serveId, imageFormat = 'jpeg' } = props;
+  const { to, subject, body, html, text, serveId, imageFormat = 'jpeg', imageData } = props;
 
   try {
     // Check if we have valid recipients
@@ -45,7 +46,8 @@ export const sendEmail = async (props: EmailProps): Promise<{ success: boolean; 
       subject, 
       html: html || body,
       text: text || body.replace(/<[^>]*>/g, ''),
-      serveId, // Pass the serve ID to fetch image_data
+      serveId,       // Pass serveId if provided
+      imageData,     // <--- NEW: Pass imageData so the function can attach it
       imageFormat
     });
 

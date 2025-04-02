@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect } from "react";
 import {
   Dialog,
@@ -110,7 +109,7 @@ export default function EditServeDialog({ serve, open, onOpenChange, onSave }: E
       
       const updatedServe: ServeAttemptData = {
         ...serve,
-        status,
+        status: status as "completed" | "failed", // Ensure status is explicitly typed
         caseNumber,
         notes,
         coordinates: validCoordinates

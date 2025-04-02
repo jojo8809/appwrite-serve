@@ -1,3 +1,4 @@
+
 import { ServeAttemptData } from "@/components/ServeAttempt";
 import { ClientData } from "@/components/ClientForm";
 
@@ -5,14 +6,14 @@ import { ClientData } from "@/components/ClientForm";
  * Normalize serve data from any format to the standard ServeAttemptData format
  * This handles conversion between snake_case, camelCase, and Appwrite document formats
  */
-export function normalizeServeData(serve: any): ServeAttemptData {
+export function normalizeServeData(serve: any): ServeAttemptData | null {
   if (!serve) return null;
 
-  // Ensure `id` is assigned from `$id`
-  const id = serve.id || serve.$id || null;
+  // Explicitly check for $id first, then id
+  const id = serve.$id || serve.id || null;
 
   if (!id) {
-    console.warn("Cannot normalize serve data without an ID:", serve);
+    console.error("Cannot normalize serve data without an ID:", serve);
     return null;
   }
 
@@ -37,18 +38,26 @@ export function normalizeServeData(serve: any): ServeAttemptData {
  * Normalize an array of serve data objects
  */
 export const normalizeServeDataArray = (serves) => {
+  if (!serves || !Array.isArray(serves)) {
+    console.warn("normalizeServeDataArray received invalid data:", serves);
+    return [];
+  }
+
   return serves.map((serve) => {
-    // Ensure `id` is assigned from `$id`
-    const id = serve.id || serve.$id || null;
+    // Ensure `id` is assigned from `$id` first
+    const id = serve.$id || serve.id || null;
 
     if (!id) {
       console.error("Cannot normalize serve data without an ID:", serve);
       return null; // Skip invalid entries
     }
 
+    // Create a new object with normalized data
     return {
       ...serve,
       id, // Assign the normalized `id`
+      clientId: serve.clientId || serve.client_id || "unknown",
+      clientName: serve.clientName || serve.client_name || "Unknown Client",
       date: serve.timestamp ? new Date(serve.timestamp).toLocaleDateString() : undefined,
       time: serve.timestamp ? new Date(serve.timestamp).toLocaleTimeString() : undefined,
     };
@@ -69,8 +78,12 @@ export function addClientNamesToServes(serves: ServeAttemptData[], clients: Clie
       return serve;
     }
 
-    // Find matching client
-    const client = clients.find(c => c.id === serve.clientId || c.$id === serve.clientId);
+    // Find matching client - check both id and $id properties
+    const client = clients.find(c => {
+      // Handle both ClientData and raw Appwrite document formats
+      const clientId = c.id || (c as any).$id;
+      return clientId === serve.clientId;
+    });
     
     // Return updated serve with client name if found
     if (client) {

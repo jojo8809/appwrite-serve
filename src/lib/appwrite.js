@@ -250,28 +250,61 @@ export const appwrite = {
         throw new Error("Valid client ID is required for serve attempts.");
       }
 
-      if (!serveData.imageData) {
-        throw new Error("Image data is required for serve attempts.");
+      // Get client data to ensure we have client_name
+      let clientName = serveData.clientName || "Unknown Client";
+      if (clientName === "Unknown Client") {
+        try {
+          const client = await databases.getDocument(
+            DATABASE_ID,
+            CLIENTS_COLLECTION_ID,
+            serveData.clientId
+          );
+          if (client && client.name) {
+            clientName = client.name;
+          }
+        } catch (clientError) {
+          console.warn("Could not fetch client name:", clientError);
+        }
       }
 
-      // Format coordinates as string if needed
-      const coordinates = typeof serveData.coordinates === 'string' 
-        ? serveData.coordinates 
-        : `${serveData.coordinates.latitude},${serveData.coordinates.longitude}`;
+      // Handle the case_number field - required by Appwrite schema
+      const caseNumber = serveData.caseNumber || "Not Specified";
+      
+      // Handle the case_name field - required by Appwrite schema
+      const caseName = serveData.caseName || "Unknown Case";
+      
+      // Handle address - required by Appwrite schema
+      const address = serveData.address || "Not Specified";
 
-      // Create document
-      const response = await this.databases.createDocument(
-        this.DATABASE_ID,
-        this.SERVE_ATTEMPTS_COLLECTION_ID,
-        ID.unique(),
+      // Format coordinates as string if needed - required by Appwrite schema
+      let coordinates = "0,0"; // Default value to satisfy the required field
+      
+      if (serveData.coordinates) {
+        if (typeof serveData.coordinates === 'string') {
+          coordinates = serveData.coordinates;
+        } else if (serveData.coordinates.latitude !== undefined && serveData.coordinates.longitude !== undefined) {
+          coordinates = `${serveData.coordinates.latitude},${serveData.coordinates.longitude}`;
+        }
+      }
+
+      // Generate document ID
+      const documentId = ID.unique();
+
+      // Create document with all required fields
+      const response = await databases.createDocument(
+        DATABASE_ID,
+        SERVE_ATTEMPTS_COLLECTION_ID,
+        documentId,
         {
-          client_id: serveData.clientId, // Make sure this is set correctly
-          case_number: serveData.caseNumber || null,
-          case_name: serveData.caseName || "Unknown Case",
+          client_id: serveData.clientId,
+          client_name: clientName,
+          case_number: caseNumber,
+          case_name: caseName,
           status: serveData.status || "unknown",
           notes: serveData.notes || "",
+          address: address,
           coordinates: coordinates,
-          image_data: serveData.imageData,
+          image_data: serveData.imageData || "",
           timestamp: serveData.timestamp ? serveData.timestamp.toISOString() : new Date().toISOString(),
           attempt_number: serveData.attemptNumber || 1
         }
@@ -282,9 +315,9 @@ export const appwrite = {
 
       // Create local version with client name
       const localServe = {
-        id: response.$id, // Make sure id is set from $id
-        clientId: serveData.clientId, // Use original clientId from serveData
-        clientName: serveData.clientName || "Unknown Client",
+        id: response.$id,
+        clientId: serveData.clientId,
+        clientName: clientName,
         caseNumber: response.case_number || "Unknown",
         caseName: response.case_name || "Unknown Case",
         coordinates: response.coordinates || null,
@@ -293,6 +326,7 @@ export const appwrite = {
         timestamp: response.timestamp ? new Date(response.timestamp) : new Date(),
         attemptNumber: response.attempt_number || 1,
         imageData: response.image_data || null,
+        address: response.address || "",
       };
 
       // Update local storage
@@ -315,26 +349,67 @@ export const appwrite = {
     try {
       console.log("Updating serve attempt with data:", serveData);
 
+      // Get the document ID - could be string or object with id/$id
       const docId = typeof serveId === 'object' ? (serveId.id || serveId.$id) : serveId;
 
       if (!docId) {
         throw new Error("Valid serve ID is required for updating");
       }
 
-      // Exclude `id` from the payload as it's not part of the schema
-      const { id, ...validServeData } = serveData;
-
-      const response = await databases.updateDocument(
+      // First, fetch the current document to preserve original data
+      const originalDoc = await databases.getDocument(
         DATABASE_ID,
         SERVE_ATTEMPTS_COLLECTION_ID,
-        docId,
-        validServeData
+        docId
       );
 
-      // Sync with local storage
-      await this.syncAppwriteServesToLocal();
+      console.log("Original document:", originalDoc);
 
-      return response;
+      // Prepare update data - only include fields that are actually being changed
+      const updateData = {};
+      
+      // For string fields, update only if they differ from original and are not undefined
+      if (serveData.notes !== undefined && serveData.notes !== originalDoc.notes) 
+        updateData.notes = serveData.notes;
+      
+      if (serveData.status !== undefined && serveData.status !== originalDoc.status) 
+        updateData.status = serveData.status;
+      
+      if (serveData.caseNumber !== undefined && serveData.caseNumber !== originalDoc.case_number) 
+        updateData.case_number = serveData.caseNumber;
+      
+      // Handle Appwrite's snake_case format
+      if (serveData.case_number !== undefined && serveData.case_number !== originalDoc.case_number) 
+        updateData.case_number = serveData.case_number;
+      
+      // Never update these fields when editing to preserve original data
+      // - timestamp (preserve original)
+      // - client_id (preserve original relationship)
+      // - client_name (preserve original)
+      // - attempt_number (preserve original)
+      // - image_data (preserve original unless explicitly provided)
+      
+      console.log("Updating document with fields:", updateData);
+
+      // Only perform update if there are fields to update
+      if (Object.keys(updateData).length > 0) {
+        const response = await databases.updateDocument(
+          DATABASE_ID,
+          SERVE_ATTEMPTS_COLLECTION_ID,
+          docId,
+          updateData
+        );
+
+        console.log("Update response:", response);
+
+        // Sync with local storage
+        await this.syncAppwriteServesToLocal();
+
+        return response;
+      } else {
+        console.log("No fields to update");
+        return originalDoc; // Return original document if no updates
+      }
     } catch (error) {
       console.error('Error updating serve attempt:', error);
       throw error;

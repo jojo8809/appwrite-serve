@@ -46,7 +46,7 @@ const statusDisplayMap: Record<string, string> = {
 };
 
 export default function EditServeDialog({ serve, open, onOpenChange, onSave }: EditServeDialogProps) {
-  const [status, setStatus] = useState<"completed" | "failed">(serve.status);
+  const [status, setStatus] = useState<"completed" | "failed">(serve.status as "completed" | "failed");
   const [caseNumber, setCaseNumber] = useState<string>(serve.caseNumber || "");
   const [notes, setNotes] = useState<string>(serve.notes || "");
   const [isSaving, setIsSaving] = useState(false);
@@ -56,7 +56,7 @@ export default function EditServeDialog({ serve, open, onOpenChange, onSave }: E
   const { toast } = useToast();
 
   useEffect(() => {
-    setStatus(serve.status);
+    setStatus(serve.status as "completed" | "failed");
     setCaseNumber(serve.caseNumber || "");
     setNotes(serve.notes || "");
     setCoordinates(serve.coordinates || {});
@@ -128,8 +128,8 @@ export default function EditServeDialog({ serve, open, onOpenChange, onSave }: E
               clientName,
               caseNumber,
               new Date(serve.timestamp),
-              statusDisplayMap[serve.status],
-              statusDisplayMap[status],
+              statusDisplayMap[serve.status] || serve.status,
+              statusDisplayMap[status] || status,
               notes
             );
             

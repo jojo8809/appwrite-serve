@@ -58,6 +58,7 @@ import { appwrite } from "@/lib/appwrite";
 import { uploadClientDocument, getClientDocuments, getDocumentUrl, deleteClientDocument } from "@/utils/appwriteStorage";
 import ClientDocuments from "@/components/ClientDocuments";
 import { useIsMobile } from "@/hooks/use-mobile";
+import { UploadedDocument } from "@/types/documentTypes";
 
 interface ClientCase {
   $id: string;

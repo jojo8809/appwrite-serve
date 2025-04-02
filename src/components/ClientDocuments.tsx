@@ -18,7 +18,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { useToast } from "@/components/ui/use-toast";
+import { useToast } from "@/hooks/use-toast";
 import ResponsiveDialog from "./ResponsiveDialog";
 import {
   Table,
@@ -42,6 +42,7 @@ import { toast } from "@/hooks/use-toast";
 import { useIsMobile } from "@/hooks/use-mobile";
 import { ACTIVE_BACKEND, BACKEND_PROVIDER } from '@/config/backendConfig';
 import * as appwriteStorage from '@/utils/appwriteStorage';
+import { UploadedDocument } from '@/types/documentTypes';
 
 interface ClientDocumentsProps {
   clientId: string;
@@ -285,7 +286,7 @@ export default function ClientDocuments({ clientId, clientName, caseNumber, onUp
                 <SelectValue placeholder="Select a case (optional)" />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="">No case</SelectItem>
+                <SelectItem value="no_case">No case</SelectItem>
                 {cases.map((caseItem) => (
                   <SelectItem key={caseItem.caseNumber} value={caseItem.caseNumber}>
                     {caseItem.caseName ? `${caseItem.caseNumber} - ${caseItem.caseName}` : caseItem.caseNumber}

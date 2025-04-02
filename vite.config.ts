@@ -1,4 +1,3 @@
-
 import { defineConfig } from "vite";
 import react from "@vitejs/plugin-react-swc";
 import path from "path";
@@ -29,5 +28,10 @@ export default defineConfig(({ mode }) => ({
     'import.meta.env.VITE_SUPABASE_ANON_KEY': JSON.stringify(process.env.VITE_SUPABASE_ANON_KEY || ''),
     'import.meta.env.VITE_APPWRITE_ENDPOINT': JSON.stringify(process.env.VITE_APPWRITE_ENDPOINT || 'https://cloud.appwrite.io/v1'),
     'import.meta.env.VITE_APPWRITE_PROJECT_ID': JSON.stringify(process.env.VITE_APPWRITE_PROJECT_ID || '67ead974001245b7c6aa'),
+    'process.env': {},
+    'REACT_ROUTER_FUTURE_FLAGS': {
+      v7_startTransition: true,
+      v7_relativeSplatPath: true,
+    },
   }
 }));

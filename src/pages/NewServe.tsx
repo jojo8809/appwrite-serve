@@ -6,9 +6,10 @@ import { ArrowLeft } from "lucide-react";
 import { appwrite } from "@/lib/appwrite";
 import { toast } from "@/hooks/use-toast";
 import { isGeolocationCoordinates } from "@/utils/gps";
+import { ClientData } from '@/components/ClientForm';
 
 interface NewServeProps {
-  clients: { id: string; name: string }[];
+  clients: any[];
   addServe: (serve: ServeAttemptData) => void;
 }
 
@@ -56,14 +57,41 @@ const NewServe: React.FC<NewServeProps> = ({ clients, addServe }) => {
     }
 
     try {
-      await appwrite.createServeAttempt({
-        clientId: serveData.clientId,
-        caseNumber: serveData.caseNumber,
-        status: serveData.status,
-        notes: serveData.notes,
-        coordinates: serveData.coordinates,
-        imageData: serveData.imageData,
-        timestamp: serveData.timestamp,
+      // Ensure all required fields are present
+      if (!serveData.clientId || serveData.clientId === "unknown") {
+        console.error("Invalid client ID detected:", serveData.clientId);
+        throw new Error("Client ID is required.");
+      }
+
+      if (!serveData.imageData) {
+        console.error("Image data is missing.");
+        throw new Error("Image data is required.");
+      }
+
+      if (!serveData.caseName) {
+        console.warn("Missing case name, setting to 'Unknown Case'");
+        serveData.caseName = "Unknown Case";
+      }
+
+      // Format coordinates as a string if needed
+      let formattedCoordinates = null;
+      if (serveData.coordinates) {
+        if (typeof serveData.coordinates === 'object') {
+          formattedCoordinates = `${serveData.coordinates.latitude},${serveData.coordinates.longitude}`;
+        } else {
+          formattedCoordinates = serveData.coordinates;
+        }
+      }
+
+      console.log("Full serve data being saved:", {
+        ...serveData,
+        coordinates: formattedCoordinates,
+      });
+
+      // Save the serve data
+      addServe({
+        ...serveData,
+        coordinates: formattedCoordinates, // Ensure coordinates are a string
       });
 
       toast({
@@ -72,13 +100,12 @@ const NewServe: React.FC<NewServeProps> = ({ clients, addServe }) => {
         variant: "success",
       });
 
-      addServe(serveData);
       navigate("/history");
     } catch (error) {
       console.error("Error saving serve attempt:", error);
       toast({
         title: "Error",
-        description: "Failed to save serve attempt",
+        description: error.message || "Failed to save serve attempt",
         variant: "destructive",
       });
     }

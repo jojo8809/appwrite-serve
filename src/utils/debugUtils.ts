@@ -1,211 +1,121 @@
-import { appwrite } from '@/lib/appwrite';
-import { APPWRITE_CONFIG } from '@/config/backendConfig';
 
-// Add this to the window object for console debugging
+// Import any necessary types or utilities here
+import { appwrite } from '@/lib/appwrite';
+
+// Define a type for client data to fix the object property access issues
+interface ClientData {
+  id: string;
+  name: string;
+  email: string;
+  additionalEmails: string[];
+  phone: string;
+  address: string;
+  notes: string;
+  [key: string]: any; // Allow other properties
+}
+
+// Extend the Window interface to include our debug tools
 declare global {
   interface Window {
-    appwriteDebug: any;
+    inspectAppwriteConfig: () => void;
+    fixClientIdsInServeAttempts: () => Promise<{ message: string; fixed: number }>;
+    testCreateClient: () => Promise<{ success: boolean; client?: any; error?: any }>;
+    testDeleteClient: (clientId: string) => void;
+    listClients: () => Promise<{ success: boolean; clients?: any[]; error?: any }>;
   }
 }
 
-export const initializeDebugTools = () => {
-  // Create debug object with all test functions
-  window.appwriteDebug = {
-    config: {
-      ...APPWRITE_CONFIG,
-      endpoint: import.meta.env.VITE_APPWRITE_ENDPOINT || APPWRITE_CONFIG.endpoint,
-      projectId: import.meta.env.VITE_APPWRITE_PROJECT_ID || APPWRITE_CONFIG.projectId,
-    },
-    
-    // Test client operations
-    clients: {
-      list: async () => {
-        console.log('Fetching all clients...');
-        try {
+// Initialize debug tools for development environment
+export function initializeDebugTools() {
+  console.log('Debug tools initialized');
+
+  // Add a function to the window object to inspect Appwrite configuration
+  window.inspectAppwriteConfig = () => {
+    console.log('Appwrite Config:', {
+      endpoint: import.meta.env.VITE_APPWRITE_ENDPOINT,
+      projectId: import.meta.env.VITE_APPWRITE_PROJECT_ID,
+      databaseId: import.meta.env.VITE_APPWRITE_DATABASE_ID,
+      clientsCollectionId: import.meta.env.VITE_APPWRITE_CLIENTS_COLLECTION_ID,
+      serveAttemptsCollectionId: import.meta.env.VITE_APPWRITE_SERVE_ATTEMPTS_COLLECTION_ID,
+      clientCasesCollectionId: import.meta.env.VITE_APPWRITE_CLIENT_CASES_COLLECTION_ID,
+      clientDocumentsCollectionId: import.meta.env.VITE_APPWRITE_CLIENT_DOCUMENTS_COLLECTION_ID,
+      storageBucketId: import.meta.env.VITE_APPWRITE_STORAGE_BUCKET_ID,
+      emailFunctionId: import.meta.env.VITE_APPWRITE_EMAIL_FUNCTION_ID,
+    });
+  };
+
+  // Add client data repair function to window object
+  window.fixClientIdsInServeAttempts = async function() {
+    try {
+      console.log('Attempting to fix client IDs in serve attempts...');
+      const serveAttempts = await appwrite.getServeAttempts();
+      let fixedCount = 0;
+
+      for (const serve of serveAttempts) {
+        if (!serve.client_id || serve.client_id === 'unknown') {
+          console.warn(`Serve attempt ${serve.$id} has an invalid client ID. Attempting to fix...`);
+          
+          // Fetch the first client as a default
           const clients = await appwrite.getClients();
-          console.log('Clients:', clients);
-          return clients;
-        } catch (error) {
-          console.error('Error fetching clients:', error);
-          return null;
-        }
-      },
-      create: async (name) => {
-        try {
-          const client = await appwrite.createClient({
-            name: name || 'Test Client',
-            email: `test-${Date.now()}@example.com`,
-            phone: '555-123-4567',
-            address: '123 Test St',
-            notes: 'Created via debug tool'
-          });
-          console.log('Created client:', client);
-          return client;
-        } catch (error) {
-          console.error('Error creating client:', error);
-          return null;
-        }
-      },
-      delete: async (clientId) => {
-        try {
-          console.log(`Deleting client ${clientId}...`);
-          const result = await appwrite.deleteClient(clientId);
-          console.log('Delete result:', result);
-          return result;
-        } catch (error) {
-          console.error('Error deleting client:', error);
-          return null;
-        }
-      },
-      update: async (clientId, clientData = {}) => {
-        try {
-          console.log(`Updating client ${clientId}...`);
-          
-          // Get current client data
-          const client = await appwrite.databases.getDocument(
-            APPWRITE_CONFIG.databaseId,
-            APPWRITE_CONFIG.collections.clients,
-            clientId
-          );
-          
-          console.log('Current client data:', client);
-          
-          // Prepare update data with defaults from current client
-          const updateData = {
-            name: clientData.name || client.name,
-            email: clientData.email || client.email,
-            additionalEmails: clientData.additionalEmails || client.additional_emails || [],
-            phone: clientData.phone || client.phone,
-            address: clientData.address || client.address,
-            notes: clientData.notes || client.notes || "",
-          };
-          
-          console.log('Update data being sent:', updateData);
-          
-          const result = await appwrite.updateClient(clientId, updateData);
-          console.log('Client update result:', result);
-          return result;
-        } catch (error) {
-          console.error('Error updating client:', error);
-          console.error('Error details:', error.response || error.message);
-          return null;
+          if (clients && clients.length > 0) {
+            const firstClientId = clients[0].$id;
+            console.log(`Updating serve attempt ${serve.$id} with client ID: ${firstClientId}`);
+            await appwrite.databases.updateDocument(
+              appwrite.DATABASE_ID,
+              appwrite.SERVE_ATTEMPTS_COLLECTION_ID,
+              serve.$id,
+              { client_id: firstClientId }
+            );
+            fixedCount++;
+          } else {
+            console.warn('No clients found. Cannot fix serve attempts.');
+            return { message: 'No clients found. Cannot fix serve attempts.', fixed: 0 };
+          }
         }
       }
-    },
-    
-    // Test case operations
-    cases: {
-      list: async (clientId) => {
-        try {
-          console.log(`Fetching cases for client ${clientId}...`);
-          const cases = await appwrite.getClientCases(clientId);
-          console.log('Cases:', cases);
-          return cases;
-        } catch (error) {
-          console.error('Error fetching cases:', error);
-          return null;
-        }
-      },
-      create: async (clientId) => {
-        try {
-          const caseData = {
-            clientId: clientId,
-            caseNumber: `CASE-${Date.now()}`,
-            caseName: 'Test Case',
-            description: 'Created via debug tool',
-            status: 'Active',
-            homeAddress: '123 Home St',
-            workAddress: '456 Work Ave'
-          };
-          console.log('Creating case with data:', caseData);
-          const result = await appwrite.createClientCase(caseData);
-          console.log('Case creation result:', result);
-          return result;
-        } catch (error) {
-          console.error('Error creating case:', error);
-          return null;
-        }
-      },
-      update: async (caseId, caseData = {}) => {
-        try {
-          console.log(`Updating case ${caseId}...`);
-          const defaultData = {
-            caseNumber: `UPDATED-${Date.now()}`,
-            caseName: 'Updated Test Case',
-            description: 'Updated via debug tool',
-            status: 'Pending',
-            homeAddress: '123 Updated Home St',
-            workAddress: '456 Updated Work Ave'
-          };
-          
-          const updateData = { ...defaultData, ...caseData };
-          console.log('Update data:', updateData);
-          
-          const result = await appwrite.updateClientCase(caseId, updateData);
-          console.log('Case update result:', result);
-          return result;
-        } catch (error) {
-          console.error('Error updating case:', error);
-          return null;
-        }
-      }
-    },
-    
-    // Test raw Appwrite access
-    raw: {
-      listDocuments: async (collectionId, queries = []) => {
-        try {
-          console.log(`Listing documents in ${collectionId}...`);
-          const result = await appwrite.databases.listDocuments(
-            APPWRITE_CONFIG.databaseId,
-            collectionId,
-            queries
-          );
-          console.log('Documents:', result);
-          return result;
-        } catch (error) {
-          console.error('Error listing documents:', error);
-          return null;
-        }
-      },
-      upload: async (clientId, caseNumber = '') => {
-        try {
-          // Create a simple text file
-          const content = `Test file created at ${new Date().toISOString()}`;
-          const blob = new Blob([content], { type: 'text/plain' });
-          const file = new File([blob], `test-${Date.now()}.txt`, { type: 'text/plain' });
-          
-          console.log(`Uploading document for client ${clientId}...`);
-          const result = await appwrite.uploadClientDocument(
-            clientId, 
-            file, 
-            caseNumber, 
-            'Uploaded via debug tool'
-          );
-          console.log('Document upload result:', result);
-          return result;
-        } catch (error) {
-          console.error('Error uploading document:', error);
-          return null;
-        }
-      }
-    },
-    
-    // Help command
-    help: () => {
-      console.log('AppwriteDebug available commands:');
-      console.log('- appwriteDebug.config - Show current Appwrite configuration');
-      console.log('- appwriteDebug.clients.list() - List all clients');
-      console.log('- appwriteDebug.clients.create("Name") - Create a test client');
-      console.log('- appwriteDebug.clients.delete("clientId") - Delete a client');
-      console.log('- appwriteDebug.clients.update("clientId", { clientData }) - Update a client');
-      console.log('- appwriteDebug.cases.list("clientId") - List cases for a client');
-      console.log('- appwriteDebug.cases.create("clientId") - Create a test case');
-      console.log('- appwriteDebug.cases.update("caseId", { caseData }) - Update a test case');
-      console.log('- appwriteDebug.raw.listDocuments("collectionId") - List raw documents');
-      console.log('- appwriteDebug.raw.upload("clientId", "caseNumber") - Upload a document');
+
+      console.log(`Fixed ${fixedCount} serve attempts with invalid client IDs.`);
+      return { message: `Fixed ${fixedCount} serve attempts with invalid client IDs.`, fixed: fixedCount };
+    } catch (error) {
+      console.error('Error fixing client IDs in serve attempts:', error);
+      return { message: `Error fixing client IDs: ${error.message}`, fixed: 0 };
     }
   };
-  
-  console.log('Appwrite debug tools initialized. Type appwriteDebug.help() for commands.');
-};
+
+  // Add function to test client creation
+  window.testCreateClient = async function() {
+    try {
+      // Define client with correct type
+      const clientData: ClientData = {
+        id: '', 
+        name: 'Test Client',
+        email: 'test@example.com',
+        additionalEmails: [],
+        phone: '555-123-4567',
+        address: '123 Test Street',
+        notes: 'Created for testing'
+      };
+
+      // Create a test client using the Appwrite SDK
+      const newClient = await appwrite.createClient(clientData);
+
+      console.log('Test client created:', newClient);
+      return { success: true, client: newClient };
+    } catch (error) {
+      console.error('Error creating test client:', error);
+      return { success: false, error };
+    }
+  };
+
+  // Add function to list all clients
+  window.listClients = async function() {
+    try {
+      const clients = await appwrite.getClients();
+      console.log('Listing all clients:', clients);
+      return { success: true, clients };
+    } catch (error) {
+      console.error('Error listing clients:', error);
+      return { success: false, error };
+    }
+  };
+}

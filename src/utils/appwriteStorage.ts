@@ -1,18 +1,7 @@
 import { appwrite } from "@/lib/appwrite";
 import { v4 as uuidv4 } from "uuid";
-
-// Make sure to export the type properly with 'export type'
-export type UploadedDocument = {
-  id: string;
-  clientId: string;
-  fileName: string;
-  filePath: string;
-  fileType: string;
-  fileSize: number;
-  caseNumber?: string;
-  description?: string;
-  caseName?: string;
-};
+import { ServeAttemptData } from "@/components/ServeAttempt";
+import { UploadedDocument } from "@/types/documentTypes"; 
 
 export async function uploadClientDocument(
   clientId: string,
@@ -36,7 +25,6 @@ export async function uploadClientDocument(
       fileSize: document.file_size,
       caseNumber: document.case_number,
       description: document.description,
-      // Note: caseName is populated client-side
       caseName: undefined
     };
   } catch (error) {
@@ -58,7 +46,7 @@ export async function getClientDocuments(clientId: string, caseNumber?: string):
       fileSize: doc.file_size,
       caseNumber: doc.case_number,
       description: doc.description,
-      caseName: undefined // We don't have this in the document
+      caseName: undefined
     }));
   } catch (error) {
     console.error("Error fetching documents:", error);
@@ -68,7 +56,8 @@ export async function getClientDocuments(clientId: string, caseNumber?: string):
 
 export async function getDocumentUrl(filePath: string): Promise<string | null> {
   try {
-    return await appwrite.getDocumentUrl(filePath);
+    const url = await appwrite.storage.getFileView(appwrite.STORAGE_BUCKET_ID, filePath);
+    return url.href;
   } catch (error) {
     console.error("Error getting document URL:", error);
     return null;
@@ -90,7 +79,6 @@ export async function getClientCases(clientId: string): Promise<{ caseNumber: st
     const cases = await appwrite.getClientCases(clientId);
     console.log("Raw cases response:", cases);
     
-    // Filter to include both Active and Pending cases
     const availableCases = cases.filter(caseItem => 
       caseItem.status === "Active" || caseItem.status === "Pending"
     );
@@ -109,7 +97,7 @@ export async function getClientCases(clientId: string): Promise<{ caseNumber: st
 export async function getServeAttemptsCount(clientId: string, caseNumber: string): Promise<number> {
   try {
     const serveAttempts = await appwrite.getClientServeAttempts(clientId);
-    return serveAttempts.filter(serve => serve.case_number === caseNumber).length;
+    return serveAttempts.filter(serve => serve.caseNumber === caseNumber).length;
   } catch (error) {
     console.error("Error counting serve attempts:", error);
     return 0;

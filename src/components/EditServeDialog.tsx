@@ -26,6 +26,7 @@ import { appwrite } from "@/lib/appwrite";
 import { isGeolocationCoordinates } from "@/utils/gps";
 import { ACTIVE_BACKEND, BACKEND_PROVIDER } from "@/config/backendConfig";
 import { supabase } from "@/lib/supabase";
+import { useToast } from "@/hooks/use-toast";
 
 interface EditServeDialogProps {
   serve: ServeAttemptData;
@@ -52,6 +53,7 @@ export default function EditServeDialog({ serve, open, onOpenChange, onSave }: E
   const [clientEmail, setClientEmail] = useState<string | null>(null);
   const [clientName, setClientName] = useState<string>("Client");
   const [coordinates, setCoordinates] = useState<any>(serve.coordinates || {});
+  const { toast } = useToast();
 
   useEffect(() => {
     setStatus(serve.status);
@@ -141,11 +143,19 @@ export default function EditServeDialog({ serve, open, onOpenChange, onSave }: E
               console.log("Email Sent: Status update email sent to client");
             } else {
               console.error("Email sending failed:", emailResult.message);
-              console.log("Email Failed: Failed to send status update email: " + emailResult.message);
+              toast({
+                title: "Email Failed",
+                description: "Failed to send status update email: " + emailResult.message,
+                variant: "destructive"
+              });
             }
           } catch (error) {
             console.error("Error sending status update email:", error);
-            console.log("Email Error: Failed to send status update email");
+            toast({
+              title: "Email Error",
+              description: "Failed to send status update email",
+              variant: "destructive"
+            });
           }
         }
         
@@ -153,7 +163,11 @@ export default function EditServeDialog({ serve, open, onOpenChange, onSave }: E
       }
     } catch (error) {
       console.error("Error saving serve attempt:", error);
-      console.log("Save Error: An error occurred while saving");
+      toast({
+        title: "Save Error",
+        description: "An error occurred while saving",
+        variant: "destructive"
+      });
     } finally {
       setIsSaving(false);
     }

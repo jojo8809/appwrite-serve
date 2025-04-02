@@ -26,7 +26,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import CameraComponent from "./Camera";
 import { embedGpsIntoImage } from "@/utils/gps";
 import { formatCoordinates } from "@/utils/gps";
-import { sendEmail, createServeEmailBody, resendEmail } from "@/utils/email";
+import { sendEmail, createServeEmailBody } from "@/utils/email";
 import { useToast } from "@/components/ui/use-toast";
 import { MapPin, Mail, Camera, AlertCircle, CheckCircle, Loader2, ExternalLink, Search } from "lucide-react";
 import { getClientCases, getServeAttemptsCount } from "@/utils/appwriteStorage";
@@ -38,13 +38,15 @@ import { useIsMobile } from "@/hooks/use-mobile";
 export interface ServeAttemptData {
   id?: string;
   clientId: string;
+  clientName?: string;
   imageData: string;
-  coordinates: GeolocationCoordinates;
+  coordinates: GeolocationCoordinates | string;
   notes: string;
   timestamp: Date;
   status: "completed" | "failed";
   attemptNumber: number;
   caseNumber?: string;
+  caseName?: string;
 }
 
 interface ServeAttemptProps {
@@ -119,28 +121,22 @@ const ServeAttempt: React.FC<ServeAttemptProps> = ({
     const fetchAllCases = async () => {
       setIsLoadingCases(true);
       try {
-        console.log("Fetching all cases for all clients...");
         const activeCases: ClientCase[] = [];
 
         for (const client of clients) {
           const clientCases = await appwrite.getClientCases(client.id);
-          console.log(`Fetched cases for client ${client.name}:`, clientCases);
-
-          for (const caseItem of clientCases) {
-            if (caseItem.status !== "Closed") {
-              activeCases.push({
-                caseNumber: caseItem.case_number,
-                caseName: caseItem.case_name,
-                homeAddress: caseItem.home_address,
-                workAddress: caseItem.work_address,
-                clientId: client.id,
-                clientName: client.name,
-              });
-            }
-          }
+          activeCases.push(
+            ...clientCases.filter((caseItem) => caseItem.status !== "Closed").map((caseItem) => ({
+              caseNumber: caseItem.case_number,
+              caseName: caseItem.case_name,
+              homeAddress: caseItem.home_address,
+              workAddress: caseItem.work_address,
+              clientId: client.id,
+              clientName: client.name,
+            }))
+          );
         }
 
-        console.log("Active cases across all clients:", activeCases);
         setAllCases(activeCases);
       } catch (error) {
         console.error("Error fetching all cases:", error);
@@ -162,7 +158,6 @@ const ServeAttempt: React.FC<ServeAttemptProps> = ({
       const fetchClientCases = async () => {
         setIsLoadingCases(true);
         try {
-          console.log(`Fetching cases for selected client ${selectedClient.name}...`);
           const clientCases = await appwrite.getClientCases(selectedClient.id);
           const activeCases = clientCases
             .filter((caseItem) => caseItem.status !== "Closed")
@@ -175,7 +170,6 @@ const ServeAttempt: React.FC<ServeAttemptProps> = ({
               clientName: selectedClient.name,
             }));
 
-          console.log(`Active cases for client ${selectedClient.name}:`, activeCases);
           setClientCases(activeCases);
         } catch (error) {
           console.error("Error fetching client cases:", error);
@@ -274,20 +268,20 @@ const ServeAttempt: React.FC<ServeAttemptProps> = ({
     setStep("confirm");
   };
 
-  const getMapLink = (address: string) => {
-    return `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(address)}`;
-  };
-
   const handleAddressClick = (address: string, e: React.MouseEvent) => {
     e.preventDefault();
-    window.open(getMapLink(address), '_blank', 'noopener,noreferrer');
-    
-    console.log("Opening map", "Opening address location in Google Maps");
+    window.open(`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(address)}`, '_blank', 'noopener,noreferrer');
+    console.log("Opening address location in Google Maps:", address);
   };
 
   const handleSubmit = async (data: ServeFormValues) => {
-    if (!capturedImage || !location || !selectedClient) {
+    if (!capturedImage || !location || !selectedClient || !selectedCase) {
       console.error("Missing required information. Please try again.");
+      toast({
+        title: "Missing Information",
+        description: "Required information is missing. Please try again.",
+        variant: "destructive",
+      });
       return;
     }
 
@@ -296,47 +290,43 @@ const ServeAttempt: React.FC<ServeAttemptProps> = ({
     try {
       const imageWithGPS = embedGpsIntoImage(capturedImage, location);
 
+      // Format coordinates as a string
+      const formattedCoordinates = `${location.latitude},${location.longitude}`;
+
+      console.log(`Using client ID: ${selectedClient.id} for serve attempt`);
+
       const serveData: ServeAttemptData = {
-        clientId: data.clientId,
-        caseNumber: data.caseNumber,
+        clientId: selectedClient.id,
+        clientName: selectedClient.name,
+        caseNumber: selectedCase.caseNumber,
+        caseName: selectedCase.caseName || "Unknown Case",
         imageData: imageWithGPS,
-        coordinates: location,
+        coordinates: formattedCoordinates,
         notes: data.notes || "",
         timestamp: new Date(),
         status: data.status,
         attemptNumber: caseAttemptCount + 1,
       };
 
-      console.log("Submitting serve attempt:", serveData);
+      console.log("Submitting serve attempt with data:", JSON.stringify({
+        ...serveData,
+        imageData: "[IMAGE DATA]",
+      }));
 
-      // Save serve attempt to Appwrite
       const savedServe = await appwrite.createServeAttempt(serveData);
-      console.log("Serve attempt saved:", savedServe);
 
-      // Send email notification
-      const emailBody = createServeEmailBody(
-        selectedClient.name,
-        selectedClient.address,
-        data.notes || "No additional notes",
-        serveData.timestamp,
-        location,
-        serveData.attemptNumber,
-        data.caseNumber
-      );
-
-      const emailResult = await sendEmail({
-        to: selectedClient.email,
-        subject: `Process Serve Attempt #${serveData.attemptNumber} - Case ${data.caseNumber}`,
-        body: emailBody,
-      });
-
-      if (emailResult.success) {
-        console.log("Email sent successfully.");
-      } else {
-        console.error("Failed to send email:", emailResult.message);
+      if (!savedServe) {
+        throw new Error("Failed to save serve attempt.");
       }
 
-      onComplete(serveData);
+      await appwrite.syncAppwriteServesToLocal();
+
+      toast({
+        title: "Serve recorded",
+        description: "Service attempt has been saved successfully.",
+        variant: "success",
+      });
+
       form.reset();
       setCapturedImage(null);
       setLocation(null);
@@ -345,9 +335,18 @@ const ServeAttempt: React.FC<ServeAttemptProps> = ({
       setStep("select");
     } catch (error) {
       console.error("Error submitting serve attempt:", error);
+      toast({
+        title: "Error",
+        description: "Failed to submit serve attempt. Please try again.",
+        variant: "destructive",
+      });
     } finally {
       setIsSending(false);
     }
+  };
+
+  const getMapLink = (address: string) => {
+    return `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(address)}`;
   };
 
   const isCaseSelected = !!form.watch("caseNumber");
@@ -491,7 +490,6 @@ const ServeAttempt: React.FC<ServeAttemptProps> = ({
                         {selectedClient.email}
                       </p>
                     </div>
-
                     {clientCases.length > 0 ? (
                       <>
                         <FormField
@@ -544,7 +542,7 @@ const ServeAttempt: React.FC<ServeAttemptProps> = ({
                             <a 
                               href={getMapLink(selectedCase.homeAddress)}
                               className="text-xs text-primary hover:underline flex items-center gap-1"
-                              target="_blank" 
+                              target="_blank"
                               rel="noopener noreferrer"
                               onClick={(e) => handleAddressClick(selectedCase.homeAddress!, e)}
                             >
@@ -578,7 +576,6 @@ const ServeAttempt: React.FC<ServeAttemptProps> = ({
               </form>
             </Form>
           </CardContent>
-          
           <CardFooter>
             <Button 
               className="w-full"
@@ -597,7 +594,7 @@ const ServeAttempt: React.FC<ServeAttemptProps> = ({
           <div className="flex items-center justify-between mb-2">
             <h3 className="text-lg font-medium">Capture Photo</h3>
             <Button 
-              variant="ghost" 
+              variant="ghost"
               onClick={() => setStep("select")}
               size="sm"
             >
@@ -606,7 +603,6 @@ const ServeAttempt: React.FC<ServeAttemptProps> = ({
           </div>
           
           <CameraComponent onCapture={handleCameraCapture} />
-          
           <p className="text-sm text-muted-foreground text-center">
             The photo will automatically include GPS location data
           </p>
@@ -639,7 +635,7 @@ const ServeAttempt: React.FC<ServeAttemptProps> = ({
                     )}
                   </div>
                 )}
-                
+
                 <div className="rounded-md overflow-hidden mb-4 border">
                   <img 
                     src={capturedImage} 
@@ -657,7 +653,7 @@ const ServeAttempt: React.FC<ServeAttemptProps> = ({
                     Accuracy: ±{Math.round(location.accuracy)}m
                   </div>
                 </div>
-                
+
                 <FormField
                   control={form.control}
                   name="status"
@@ -692,7 +688,7 @@ const ServeAttempt: React.FC<ServeAttemptProps> = ({
                     </FormItem>
                   )}
                 />
-                
+
                 <FormField
                   control={form.control}
                   name="notes"
@@ -710,10 +706,10 @@ const ServeAttempt: React.FC<ServeAttemptProps> = ({
                     </FormItem>
                   )}
                 />
-                
+
                 <div className="flex gap-2 pt-4">
                   <Button 
-                    type="button"
+                    type="button" 
                     variant="outline"
                     onClick={() => setStep("capture")}
                     className="flex-1"

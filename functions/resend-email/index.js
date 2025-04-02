@@ -1,68 +1,108 @@
 const { Resend } = require("resend");
 
-module.exports = async function(req, res) {
+// Appwrite functions return directly, not using res.json()
+module.exports = async function(req) {
   console.log("Function execution started...");
-  console.log("Request object keys:", Object.keys(req));
   
   try {
     let payload;
     
     // Extract payload
-    if (req.payload === undefined) {
-      console.log("Payload is undefined, looking for alternatives");
-      if (req.body) {
-        payload = typeof req.body === 'string' ? JSON.parse(req.body) : req.body;
-      } else if (req.method === 'POST' && typeof req.rawBody === 'string') {
-        payload = JSON.parse(req.rawBody);
-      } else {
-        console.log("Using hardcoded test values for console testing");
-        payload = {
-          to: "iannazzi.joseph@gmail.com",
-          subject: "Test Email from Console",
-          body: "<p>This is a test email sent from the Appwrite console.</p>"
-        };
-      }
-    } else {
+    if (req.payload) {
       payload = typeof req.payload === 'string' ? JSON.parse(req.payload) : req.payload;
+    } else if (req.body) {
+      payload = typeof req.body === 'string' ? JSON.parse(req.body) : req.body;
+    } else {
+      return { success: false, message: "No payload provided" };
     }
     
-    console.log("Final payload:", payload);
+    console.log("Payload received in function:", payload);
     
-    const { to, subject, body, apiKey } = payload || {};
+    const { to, subject, body, imageData, apiKey } = payload || {};
+    // Ensure we have a valid API key - if not provided in payload, try environment variable
     const resendApiKey = (req.variables && req.variables.RESEND_API_KEY) || apiKey || "re_cKhSe1Ao_7Wyvkcfq6AjC8Ccorq4GeoQA";
+    
+    console.log("Using Resend API key (first 6 chars):", resendApiKey.substring(0, 6) + "...");
     
     if (!resendApiKey) {
       console.error("RESEND_API_KEY is missing.");
-      res.json({ success: false, message: "API key is missing." });
-      return;
+      return { success: false, message: "API key is missing." };
     }
     
     if (!to || !subject || !body) {
       console.error("Missing required fields in payload.");
-      res.json({ success: false, message: "Missing required fields (to, subject, or body)." });
-      return;
+      return { success: false, message: "Missing required fields (to, subject, or body)." };
     }
 
     const resend = new Resend(resendApiKey);
-    console.log("Sending email with the following details:", { from: "ServeTracker <no-reply@justlegalsolutions.tech>", to, subject, bodyLength: body.length });
+    const recipients = Array.isArray(to) ? to : [to];
 
-    const response = await resend.emails.send({
-      from: "ServeTracker <no-reply@justlegalsolutions.tech>",
-      to,
-      subject,
-      html: body,
-    });
+    const attachments = [];
+    if (imageData) {
+      // Handle both formats of Base64 data (with or without the data:image prefix)
+      try {
+        const base64Content = imageData.includes('base64,') 
+          ? imageData.split('base64,')[1] 
+          : imageData;
+        
+        attachments.push({
+          filename: "serve-photo.jpg",
+          content: base64Content,
+          encoding: "base64",
+        });
+        console.log("Added image attachment");
+      } catch (attachErr) {
+        console.error("Error processing image attachment:", attachErr);
+      }
+    }
 
-    console.log("Resend API response:", response);
+    console.log("Sending email to:", recipients);
+    console.log("Email subject:", subject);
 
-    if (response && response.data && response.data.id) {
-      res.json({ success: true, message: "Email sent successfully.", id: response.data.id });
-    } else {
-      console.error("Resend API returned an unexpected response:", response);
-      res.json({ success: false, message: "Failed to send email. Unexpected response from Resend API." });
+    try {
+      const emailData = {
+        from: "ServeTracker <no-reply@justlegalsolutions.tech>",
+        to: recipients,
+        subject,
+        html: body,
+        attachments: attachments.length > 0 ? attachments : undefined,
+      };
+      
+      console.log("Final email payload:", {
+        ...emailData,
+        html: emailData.html ? "HTML content" : undefined,
+        attachments: emailData.attachments ? `${emailData.attachments.length} attachments` : undefined
+      });
+      
+      const response = await resend.emails.send(emailData);
+
+      console.log("Resend API raw response:", JSON.stringify(response));
+
+      if (response && response.data && response.data.id) {
+        console.log("Email sent successfully with ID:", response.data.id);
+        return { success: true, message: "Email sent successfully.", id: response.data.id };
+      } else {
+        console.error("Resend API returned an unexpected response:", response);
+        return { 
+          success: false, 
+          message: "Failed to send email. Unexpected response from Resend API."
+        };
+      }
+    } catch (error) {
+      console.error("Error sending email via Resend:", error);
+      if (error.response) {
+        console.error("Resend API error details:", error.response);
+      }
+      return { 
+        success: false, 
+        message: `Failed to send email: ${error.message}`
+      };
     }
   } catch (error) {
-    console.error("Error sending email with Resend:", error);
-    res.json({ success: false, message: "Failed to send email.", error: error.message });
+    console.error("Error in Resend function:", error);
+    return { 
+      success: false, 
+      message: `Failed to send email: ${error.message}` 
+    };
   }
 };

@@ -1,209 +1,245 @@
-import React, { useState } from "react";
-import { formatDistanceToNow } from "date-fns";
-import { Card, CardContent } from "@/components/ui/card";
-import { Badge } from "@/components/ui/badge";
+import React from "react";
+import { 
+  Card, 
+  CardContent, 
+  CardHeader,
+  CardTitle,
+  CardDescription,
+  CardFooter
+} from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { ServeAttemptData } from "./ServeAttempt";
-import { ClientData } from "./ClientForm";
-// Replace Supabase import with Appwrite
-import { appwrite } from "@/lib/appwrite";
-import { 
-  MapPin, 
-  Edit2, 
-  Trash2, 
-  CheckCircle, 
-  AlertCircle,
-  User,
-  CalendarClock,
-  FileText
-} from "lucide-react";
-import { 
-  AlertDialog,
-  AlertDialogAction,
-  AlertDialogCancel,
-  AlertDialogContent,
-  AlertDialogDescription,
-  AlertDialogFooter,
-  AlertDialogHeader,
-  AlertDialogTitle,
-  AlertDialogTrigger,
-} from "@/components/ui/alert-dialog";
-import { ScrollArea } from "@/components/ui/scroll-area";
-import { useToast } from "@/hooks/use-toast";
+import { MapPin, Calendar, ClipboardList, Clock, Edit, Trash2 } from "lucide-react";
+import { ServeAttemptData } from "@/components/ServeAttempt";
 
 interface ServeHistoryProps {
   serves: ServeAttemptData[];
-  clients: ClientData[];
-  onEdit?: (serve: ServeAttemptData) => void;
+  clients: any[];
   onDelete?: (id: string) => void;
+  onEdit?: (serve: ServeAttemptData) => void;
 }
 
-export default function ServeHistory({ serves, clients, onEdit, onDelete }: ServeHistoryProps) {
-  const [deleteId, setDeleteId] = useState<string | null>(null);
-  const [isDeleting, setIsDeleting] = useState(false);
-  const { toast } = useToast();
-  
-  const getClientName = (clientId: string) => {
-    const client = clients.find(c => c.id === clientId);
-    return client?.name || "Unknown Client";
-  };
-  
-  const formatDate = (date: Date) => {
-    try {
-      return formatDistanceToNow(new Date(date), { addSuffix: true });
-    } catch (error) {
-      console.error("Date formatting error:", error, date);
-      return "Unknown date";
-    }
-  };
-  
-  const handleDeleteConfirm = async () => {
-    if (!deleteId) return;
-    
-    setIsDeleting(true);
-    try {
-      // Use Appwrite instead of supabase
-      await appwrite.deleteServeAttempt(deleteId);
-      
-      toast({
-        title: "Serve attempt deleted",
-        description: "The serve attempt has been permanently removed",
-        variant: "default"
-      });
-      
-      // Call onDelete if provided
-      if (onDelete) {
-        onDelete(deleteId);
-      }
-      
-      setDeleteId(null);
-    } catch (error) {
-      console.error("Error deleting serve attempt:", error);
-      toast({
-        title: "Error deleting serve attempt",
-        description: "An error occurred while deleting the serve attempt",
-        variant: "destructive"
-      });
-    } finally {
-      setIsDeleting(false);
-    }
-  };
+const formatDate = (date: string | Date | undefined): string => {
+  if (!date) return "Unknown date";
+  try {
+    const parsedDate = typeof date === 'string' ? new Date(date) : date;
+    if (isNaN(parsedDate.getTime())) throw new Error("Invalid date");
+    return parsedDate.toLocaleString(); // Adjust format as needed
+  } catch (error) {
+    console.error("Date formatting error:", error, date);
+    return "Unknown date";
+  }
+};
 
-  const handleDelete = (serveId: string) => {
-    setDeleteId(serveId);
-  };
+const formatCoordinates = (coords: string | null | undefined | { latitude: number; longitude: number }): string => {
+  if (!coords) {
+    return "No coordinates available";
+  }
   
+  // Handle both string format "lat,lng" and object format
+  if (typeof coords === "string") {
+    const [latitude, longitude] = coords.split(",");
+    if (!latitude || !longitude || isNaN(parseFloat(latitude)) || isNaN(parseFloat(longitude))) {
+      return "Invalid coordinates";
+    }
+    return `${parseFloat(latitude).toFixed(6)}, ${parseFloat(longitude).toFixed(6)}`;
+  } else if (typeof coords === "object" && coords !== null) {
+    // Handle object format with latitude and longitude properties
+    const lat = coords.latitude;
+    const lng = coords.longitude;
+    if (lat === undefined || lng === undefined) {
+      return "Invalid coordinates";
+    }
+    return `${parseFloat(String(lat)).toFixed(6)}, ${parseFloat(String(lng)).toFixed(6)}`;
+  }
+  
+  return "Invalid coordinates";
+};
+
+const getGoogleMapsLink = (coords: string | null | undefined | { latitude: number; longitude: number }): string | null => {
+  if (!coords) return null;
+  
+  // Handle both string format "lat,lng" and object format
+  let latitude, longitude;
+  
+  if (typeof coords === "string") {
+    [latitude, longitude] = coords.split(",");
+  } else if (typeof coords === "object" && coords !== null) {
+    latitude = coords.latitude;
+    longitude = coords.longitude;
+  }
+
+  if (!latitude || !longitude || isNaN(parseFloat(String(latitude))) || isNaN(parseFloat(String(longitude)))) {
+    return null;
+  }
+
+  return `https://www.google.com/maps?q=${latitude},${longitude}`;
+};
+
+const getClientName = (clientId: string | undefined | null, clients: any[]): string => {
+  if (!clientId || clientId === "unknown") {
+    console.warn("Missing or invalid client ID in serve attempt:", clientId);
+    return "Unknown Client";
+  }
+
+  const client = clients.find((c) => c.id === clientId || c.$id === clientId);
+  return client?.name || "Unknown Client";
+};
+
+const ServeHistory: React.FC<ServeHistoryProps> = ({ serves, clients, onDelete, onEdit }) => {
+  console.log("ServeHistory component received serves:", serves);
+  console.log("ServeHistory component received clients:", clients);
+
   if (!serves || serves.length === 0) {
+    console.warn("No serves array provided to ServeHistory component or array is empty");
     return (
-      <div className="text-center py-10">
-        <p className="text-muted-foreground">No serve history found.</p>
+      <div className="text-center p-8">
+        <p>No serve history found.</p>
       </div>
     );
   }
 
   return (
-    <div className="space-y-3">
-      {serves.map((serve) => (
-        <Card key={serve.id} className="neo-card overflow-hidden animate-scale-in">
-          <CardContent className="p-4">
-            <div className="flex flex-col sm:flex-row justify-between">
+    <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
+      {serves.map((serve) => {
+        // Make sure we have a valid serve object with an id
+        if (!serve || !serve.id) {
+          console.warn("Invalid serve attempt in list:", serve);
+          return null;
+        }
+        
+        // Get client name - first use directly from serve object, fall back to lookup by id
+        const clientName = serve.clientName && serve.clientName !== "Unknown Client" 
+          ? serve.clientName 
+          : getClientName(serve.clientId, clients);
+        
+        const googleMapsLink = getGoogleMapsLink(serve.coordinates);
+        
+        // Debug information
+        console.log(`Rendering serve ${serve.id}:`, {
+          clientName,
+          clientId: serve.clientId,
+          coordinates: serve.coordinates,
+          formattedCoordinates: formatCoordinates(serve.coordinates),
+          googleMapsLink,
+          status: serve.status,
+          timestamp: serve.timestamp,
+          formattedDate: formatDate(serve.timestamp)
+        });
+
+        return (
+          <Card key={serve.id} className="overflow-hidden">
+            <CardHeader className="pb-2">
+              <CardTitle className="flex justify-between items-center">
+                <span>{clientName}</span>
+                <span className={`text-xs px-2 py-1 rounded-full ${
+                  serve.status === 'completed' ? 'bg-green-100 text-green-700' : 
+                  serve.status === 'failed' ? 'bg-amber-100 text-amber-700' : 
+                  'bg-gray-100 text-gray-700'
+                }`}>
+                  {serve.status === 'completed' ? 'Successful' : 
+                   serve.status === 'failed' ? 'Failed' : 
+                   'Unknown'}
+                </span>
+              </CardTitle>
+              <CardDescription>
+                <span className="flex items-center gap-1">
+                  <ClipboardList className="h-3.5 w-3.5" />
+                  <span>Case: {serve.caseName || serve.caseNumber || "Unknown"}</span>
+                </span>
+              </CardDescription>
+            </CardHeader>
+            
+            <CardContent className="pb-2">
               <div className="space-y-2">
-                <div className="flex items-center space-x-2">
-                  <User className="h-4 w-4 text-muted-foreground" />
-                  <span className="font-medium">{getClientName(serve.clientId)}</span>
-                  <Badge variant={serve.status === "completed" ? "success" : "warning"}>
-                    {serve.status === "completed" ? (
-                      <><CheckCircle className="h-3 w-3 mr-1" /> Served</>
-                    ) : (
-                      <><AlertCircle className="h-3 w-3 mr-1" /> Failed Attempt</>
-                    )}
-                  </Badge>
-                </div>
-                
-                {serve.caseNumber && (
-                  <div className="flex items-center space-x-2 text-sm text-muted-foreground">
-                    <FileText className="h-3.5 w-3.5" />
-                    <span>Case #{serve.caseNumber}</span>
-                    {serve.attemptNumber && (
-                      <span className="text-xs bg-accent px-1.5 py-0.5 rounded">
-                        Attempt #{serve.attemptNumber}
-                      </span>
-                    )}
+                {serve.imageData && (
+                  <div className="rounded-md overflow-hidden mb-3 border h-36">
+                    <img 
+                      src={serve.imageData} 
+                      alt="Serve attempt" 
+                      className="w-full h-full object-cover" 
+                      onError={(e) => {
+                        console.error("Image failed to load:", e);
+                        e.currentTarget.src = "https://placehold.co/400x300?text=No+Image";
+                      }}
+                    />
                   </div>
                 )}
                 
-                <div className="flex items-center space-x-2 text-sm text-muted-foreground">
-                  <CalendarClock className="h-3.5 w-3.5" />
+                <div className="grid grid-cols-2 gap-2 text-xs">
+                  <div className="space-y-1">
+                    <p className="font-medium flex items-center gap-1">
+                      <Calendar className="h-3.5 w-3.5" />
+                      Date
+                    </p>
+                    <p className="text-muted-foreground">{formatDate(serve.timestamp)}</p>
+                  </div>
+                  
+                  <div className="space-y-1">
+                    <p className="font-medium flex items-center gap-1">
+                      <MapPin className="h-3.5 w-3.5" />
+                      Location
+                    </p>
+                    {googleMapsLink ? (
+                      <a
+                        href={googleMapsLink}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="text-primary hover:underline"
+                      >
+                        {formatCoordinates(serve.coordinates)}
+                      </a>
+                    ) : (
+                      <p className="text-muted-foreground truncate">{formatCoordinates(serve.coordinates)}</p>
+                    )}
+                  </div>
+                </div>
+                
+                {serve.notes && (
+                  <div className="space-y-1 text-xs pt-2">
+                    <p className="font-medium">Notes</p>
+                    <p className="text-muted-foreground whitespace-pre-wrap">{serve.notes}</p>
+                  </div>
+                )}
+              </div>
+            </CardContent>
+            
+            <CardFooter className="pt-2">
+              <div className="flex w-full justify-between items-center">
+                <div className="text-xs text-muted-foreground flex items-center gap-1">
+                  <Clock className="h-3.5 w-3.5" />
                   <span>{formatDate(serve.timestamp)}</span>
                 </div>
                 
-                {serve.coordinates && (
-                  <div className="flex items-center space-x-2 text-sm text-muted-foreground">
-                    <MapPin className="h-3.5 w-3.5" />
-                    <span>
-                      {serve.coordinates.latitude.toFixed(6)}, {serve.coordinates.longitude.toFixed(6)}
-                    </span>
-                  </div>
-                )}
-                
-                {serve.notes && (
-                  <div className="mt-2 text-sm">
-                    <p className="text-muted-foreground line-clamp-2">{serve.notes}</p>
-                  </div>
-                )}
-              </div>
-              
-              <div className="flex gap-2 sm:flex-col mt-3 sm:mt-0">
-                {onEdit && (
-                  <Button 
-                    variant="outline" 
-                    size="sm" 
-                    className="flex-1 sm:flex-initial flex items-center"
-                    onClick={() => onEdit(serve)}
-                  >
-                    <Edit2 className="h-3.5 w-3.5 mr-1" />
-                    Edit
-                  </Button>
-                )}
-                
-                <AlertDialog open={deleteId === serve.id} onOpenChange={(open) => !open && setDeleteId(null)}>
-                  <AlertDialogTrigger asChild>
+                <div className="flex gap-2">
+                  {onEdit && (
                     <Button 
-                      variant="outline" 
+                      variant="ghost" 
                       size="sm" 
-                      className="flex-1 sm:flex-initial flex items-center text-destructive hover:text-destructive hover:bg-destructive/10"
-                      onClick={() => handleDelete(serve.id!)}
+                      className="h-8 w-8 p-0"
+                      onClick={() => onEdit(serve)}
                     >
-                      <Trash2 className="h-3.5 w-3.5 mr-1" />
-                      Delete
+                      <Edit className="h-4 w-4" />
                     </Button>
-                  </AlertDialogTrigger>
-                  <AlertDialogContent>
-                    <AlertDialogHeader>
-                      <AlertDialogTitle>Delete Serve Attempt</AlertDialogTitle>
-                      <AlertDialogDescription>
-                        Are you sure you want to delete this serve attempt? This action cannot be undone.
-                      </AlertDialogDescription>
-                    </AlertDialogHeader>
-                    <AlertDialogFooter>
-                      <AlertDialogCancel onClick={() => setDeleteId(null)}>
-                        Cancel
-                      </AlertDialogCancel>
-                      <AlertDialogAction 
-                        onClick={handleDeleteConfirm}
-                        className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
-                        disabled={isDeleting}
-                      >
-                        {isDeleting ? "Deleting..." : "Delete"}
-                      </AlertDialogAction>
-                    </AlertDialogFooter>
-                  </AlertDialogContent>
-                </AlertDialog>
+                  )}
+                  
+                  {onDelete && (
+                    <Button 
+                      variant="ghost" 
+                      size="sm" 
+                      className="h-8 w-8 p-0 hover:text-destructive"
+                      onClick={() => onDelete(serve.id)}
+                    >
+                      <Trash2 className="h-4 w-4" />
+                    </Button>
+                  )}
+                </div>
               </div>
-            </div>
-          </CardContent>
-        </Card>
-      ))}
+            </CardFooter>
+          </Card>
+        );
+      })}
     </div>
   );
-}
+};
+
+export default ServeHistory;

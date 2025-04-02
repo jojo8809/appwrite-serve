@@ -192,7 +192,23 @@ export const appwrite = {
   async getServeAttempts() {
     try {
       const response = await databases.listDocuments(DATABASE_ID, SERVE_ATTEMPTS_COLLECTION_ID);
-      return response.documents;
+      
+      // Map and sort the documents by timestamp (newest first)
+      const formattedServes = response.documents.map(doc => ({
+        id: doc.$id,
+        clientId: doc.client_id || "unknown",
+        clientName: doc.client_name || "Unknown Client",
+        caseNumber: doc.case_number || "Unknown",
+        caseName: doc.case_name || "Unknown Case",
+        coordinates: doc.coordinates || null,
+        notes: doc.notes || "",
+        status: doc.status || "unknown",
+        timestamp: doc.timestamp ? new Date(doc.timestamp) : new Date(),
+        attemptNumber: doc.attempt_number || 1,
+        imageData: doc.image_data || null,
+      })).sort((a, b) => b.timestamp.getTime() - a.timestamp.getTime());
+      
+      return formattedServes;
     } catch (error) {
       console.error('Error fetching serve attempts:', error);
       return [];
@@ -206,7 +222,20 @@ export const appwrite = {
         SERVE_ATTEMPTS_COLLECTION_ID,
         [Query.equal('client_id', clientId)]
       );
-      return response.documents;
+      // Convert each document to frontend format and sort by timestamp
+      return response.documents.map(doc => ({
+        id: doc.$id,
+        clientId: doc.client_id || "unknown",
+        clientName: doc.client_name || "Unknown Client", 
+        caseNumber: doc.case_number || "Unknown",
+        caseName: doc.case_name || "Unknown Case",
+        coordinates: doc.coordinates || null,
+        notes: doc.notes || "",
+        status: doc.status || "unknown",
+        timestamp: doc.timestamp ? new Date(doc.timestamp) : new Date(),
+        attemptNumber: doc.attempt_number || 1,
+        imageData: doc.image_data || null,
+      })).sort((a, b) => b.timestamp.getTime() - a.timestamp.getTime());
     } catch (error) {
       console.error(`Error fetching serve attempts for client ${clientId}:`, error);
       return [];
@@ -217,14 +246,64 @@ export const appwrite = {
     try {
       console.log("Creating serve attempt with data:", serveData);
 
+      if (!serveData.clientId || serveData.clientId === "unknown") {
+        throw new Error("Valid client ID is required for serve attempts.");
+      }
+
+      if (!serveData.imageData) {
+        throw new Error("Image data is required for serve attempts.");
+      }
+
+      // Format coordinates as string if needed
+      const coordinates = typeof serveData.coordinates === 'string' 
+        ? serveData.coordinates 
+        : `${serveData.coordinates.latitude},${serveData.coordinates.longitude}`;
+
+      // Create document
       const response = await this.databases.createDocument(
         this.DATABASE_ID,
         this.SERVE_ATTEMPTS_COLLECTION_ID,
-        "unique()", // Auto-generate document ID
-        serveData
+        ID.unique(),
+        {
+          client_id: serveData.clientId, // Make sure this is set correctly
+          case_number: serveData.caseNumber || null,
+          case_name: serveData.caseName || "Unknown Case",
+          status: serveData.status || "unknown",
+          notes: serveData.notes || "",
+          coordinates: coordinates,
+          image_data: serveData.imageData,
+          timestamp: serveData.timestamp ? serveData.timestamp.toISOString() : new Date().toISOString(),
+          attempt_number: serveData.attemptNumber || 1
+        }
       );
 
-      console.log("Serve attempt created successfully:", response);
+      console.log("Serve attempt created successfully:", response.$id);
+      console.log("Document created:", response);
+
+      // Create local version with client name
+      const localServe = {
+        id: response.$id, // Make sure id is set from $id
+        clientId: serveData.clientId, // Use original clientId from serveData
+        clientName: serveData.clientName || "Unknown Client",
+        caseNumber: response.case_number || "Unknown",
+        caseName: response.case_name || "Unknown Case",
+        coordinates: response.coordinates || null,
+        notes: response.notes || "",
+        status: response.status || "unknown",
+        timestamp: response.timestamp ? new Date(response.timestamp) : new Date(),
+        attemptNumber: response.attempt_number || 1,
+        imageData: response.image_data || null,
+      };
+
+      // Update local storage
+      const existingServes = JSON.parse(localStorage.getItem("serve-tracker-serves") || "[]");
+      existingServes.push(localServe);
+      localStorage.setItem("serve-tracker-serves", JSON.stringify(existingServes));
+      window.dispatchEvent(new CustomEvent("serves-updated"));
+
+      // Debug log the final state
+      console.log("Local serve data saved:", localServe);
+      
       return response;
     } catch (error) {
       console.error("Error creating serve attempt:", error);
@@ -234,23 +313,35 @@ export const appwrite = {
 
   async updateServeAttempt(serveId, serveData) {
     try {
+      console.log("Updating serve attempt with data:", serveData);
+      
+      // Extract the actual Appwrite document ID if full serve object was passed
+      const docId = typeof serveId === 'object' ? (serveId.id || serveId.$id) : serveId;
+      
+      if (!docId) {
+        throw new Error("Valid serve ID is required for updating");
+      }
+      
+      // Format for Appwrite's snake_case expectations
       const response = await databases.updateDocument(
         DATABASE_ID,
         SERVE_ATTEMPTS_COLLECTION_ID,
-        serveId,
+        docId,
         {
-          client_id: serveData.clientId,
-          case_number: serveData.caseNumber || "",
-          date: serveData.date,
-          time: serveData.time,
-          address: serveData.address,
-          notes: serveData.notes,
-          status: serveData.status,
-          image_data: serveData.imageData || null,
+          client_id: serveData.clientId || serveData.client_id,
+          case_number: serveData.caseNumber || serveData.case_number || "",
+          case_name: serveData.caseName || serveData.case_name || "Unknown Case",
+          notes: serveData.notes || "",
+          status: serveData.status || "unknown",
+          image_data: serveData.imageData || serveData.image_data || null,
           coordinates: serveData.coordinates || null,
           updated_at: new Date().toISOString()
         }
       );
+      
+      // Now sync with local storage to ensure consistency
+      await this.syncAppwriteServesToLocal();
+      
       return response;
     } catch (error) {
       console.error('Error updating serve attempt:', error);
@@ -269,6 +360,87 @@ export const appwrite = {
     } catch (error) {
       console.error('Error deleting serve attempt:', error);
       throw error;
+    }
+  },
+
+  async resolveClientId(fallbackClientId) {
+    try {
+      console.log(`Resolving client ID for fallback client_id: ${fallbackClientId}`);
+
+      // Check client_cases table
+      const cases = await this.databases.listDocuments(
+        this.DATABASE_ID,
+        this.CASES_COLLECTION_ID,
+        [Query.equal('client_id', fallbackClientId)]
+      );
+      if (cases.documents.length > 0) {
+        console.log(`Resolved client ID from client_cases: ${fallbackClientId}`);
+        return fallbackClientId;
+      }
+
+      // Check client_documents table
+      const documents = await this.databases.listDocuments(
+        this.DATABASE_ID,
+        this.DOCUMENTS_COLLECTION_ID,
+        [Query.equal('client_id', fallbackClientId)]
+      );
+      if (documents.documents.length > 0) {
+        console.log(`Resolved client ID from client_documents: ${fallbackClientId}`);
+        return fallbackClientId;
+      }
+
+      // Check serve_attempts table
+      const serves = await this.databases.listDocuments(
+        this.DATABASE_ID,
+        this.SERVE_ATTEMPTS_COLLECTION_ID,
+        [Query.equal('client_id', fallbackClientId)]
+      );
+      if (serves.documents.length > 0) {
+        console.log(`Resolved client ID from serve_attempts: ${fallbackClientId}`);
+        return fallbackClientId;
+      }
+
+      console.warn(`Unable to resolve client ID for fallback client_id: ${fallbackClientId}`);
+      return null;
+    } catch (error) {
+      console.error(`Error resolving client ID for fallback client_id: ${fallbackClientId}`, error);
+      return null;
+    }
+  },
+
+  async syncAppwriteServesToLocal() {
+    try {
+      // Fetch all serve attempts from Appwrite
+      const response = await databases.listDocuments(DATABASE_ID, SERVE_ATTEMPTS_COLLECTION_ID);
+      if (!response.documents || response.documents.length === 0) {
+        console.log("No serve attempts found in Appwrite");
+        return false;
+      }
+
+      // Convert to frontend format and sort by timestamp (newest first)
+      const frontendServes = response.documents.map(doc => ({
+        id: doc.$id,
+        clientId: doc.client_id || "unknown",
+        clientName: doc.client_name || "Unknown Client",
+        caseNumber: doc.case_number || "Unknown",
+        caseName: doc.case_name || "Unknown Case",
+        coordinates: doc.coordinates || null,
+        notes: doc.notes || "",
+        status: doc.status || "unknown",
+        timestamp: doc.timestamp ? new Date(doc.timestamp) : new Date(),
+        attemptNumber: doc.attempt_number || 1,
+        imageData: doc.image_data || null,
+      })).sort((a, b) => b.timestamp.getTime() - a.timestamp.getTime());
+
+      // Store in local storage
+      localStorage.setItem("serve-tracker-serves", JSON.stringify(frontendServes));
+      window.dispatchEvent(new CustomEvent("serves-updated"));
+
+      console.log(`Synced ${frontendServes.length} serve attempts from Appwrite to local storage`);
+      return true;
+    } catch (error) {
+      console.error("Error syncing serve attempts from Appwrite:", error);
+      return false;
     }
   },
 
@@ -378,7 +550,7 @@ export const appwrite = {
         fileId,
         file
       );
-
+      
       const docId = ID.unique();
       const now = new Date().toISOString();
       const document = await databases.createDocument(
@@ -417,7 +589,7 @@ export const appwrite = {
       return response.documents;
     } catch (error) {
       console.error(`Error fetching documents for client ${clientId}:`, error);
-      throw error;
+      return [];
     }
   },
 

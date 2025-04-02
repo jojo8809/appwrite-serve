@@ -19,11 +19,16 @@ interface ImportMeta {
 
 // Define GeolocationCoordinates type for compatibility
 interface GeolocationCoordinatesCompatible {
-  lat: number;
-  lng: number;
+  latitude: number;
+  longitude: number;
   accuracy?: number;
   altitude?: number | null;
   altitudeAccuracy?: number | null;
   heading?: number | null;
   speed?: number | null;
+}
+
+// Make it available globally for type checking
+declare global {
+  type CoordinateTypes = string | GeolocationCoordinatesCompatible | null;
 }

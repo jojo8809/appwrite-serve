@@ -5,8 +5,10 @@ import { Textarea } from "@/components/ui/textarea";
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
 import { useToast } from "@/hooks/use-toast";
 import { sendEmail } from "@/utils/email";
+import { testEmailFunctionality } from "@/utils/testEmail";
 import { Loader2, Mail, CheckCircle, XCircle, AlertCircle } from "lucide-react";
 import { isAppwriteConfigured } from "@/config/backendConfig";
+import { appwrite } from "@/lib/appwrite";
 
 const Index = () => {
   const [recipientEmail, setRecipientEmail] = useState("");
@@ -22,31 +24,22 @@ const Index = () => {
   const { toast } = useToast();
 
   useEffect(() => {
-    // Check if Appwrite is configured
     const configured = isAppwriteConfigured();
-    setIsSupabaseReady(configured); // Keeping the variable name for simplicity
+    setIsSupabaseReady(configured);
     
     if (!configured) {
       setError("Appwrite configuration is missing. Email functionality may not work.");
     }
     
-    // Log environment details for debugging
     console.log("Environment check:");
     console.log("- Appwrite configured:", configured);
     console.log("- URL:", window.location.href);
     console.log("- User agent:", navigator.userAgent);
   }, []);
 
-  const handleSendEmail = async () => {
-    if (!recipientEmail || !recipientEmail.includes('@')) {
-      toast({
-        title: "Invalid email",
-        description: "Please enter a valid email address",
-        variant: "destructive"
-      });
-      return;
-    }
-
+  const handleSendTestEmail = async () => {
+    if (isSending) return;
+    
     setIsSending(true);
     setSent(false);
     setError(null);
@@ -59,12 +52,7 @@ const Index = () => {
         bodyLength: emailBody.length
       });
       
-      // Pass the recipient email - our utility will automatically add info@justlegalsolutions.org
-      const result = await sendEmail({
-        to: recipientEmail,
-        subject: subject,
-        body: emailBody
-      });
+      const result = await testEmailFunctionality();
       
       console.log("Email send result:", result);
       
@@ -196,10 +184,139 @@ const Index = () => {
             </div>
           )}
         </CardContent>
+
+        <div className="mx-6 mb-4">
+          <details className="text-sm">
+            <summary className="cursor-pointer text-primary font-medium">
+              Email Troubleshooting Tools
+            </summary>
+            <div className="mt-2 border rounded p-3 space-y-2">
+              <p className="text-xs text-gray-600">
+                If emails aren't being sent, you can use these tools to diagnose issues.
+              </p>
+              <div className="flex flex-col space-y-2">
+                <Button 
+                  variant="outline" 
+                  size="sm"
+                  onClick={async () => {
+                    setIsSending(true);
+                    try {
+                      const result = await fetch("https://api.resend.com/emails", {
+                        method: "POST",
+                        headers: {
+                          "Content-Type": "application/json",
+                          "Authorization": `Bearer re_cKhSe1Ao_7Wyvkcfq6AjC8Ccorq4GeoQA`
+                        },
+                        body: JSON.stringify({
+                          from: "ServeTracker <no-reply@justlegalsolutions.tech>",
+                          to: ["info@justlegalsolutions.org"],
+                          subject: "Direct API Test",
+                          html: "<p>This is a direct API test</p>"
+                        })
+                      });
+                      const data = await result.json();
+                      toast({
+                        title: data.id ? "Direct API Test Passed" : "Direct API Test Failed",
+                        description: data.id ? `Email sent with ID: ${data.id}` : (data.message || "Unknown error"),
+                        variant: data.id ? "default" : "destructive"
+                      });
+                    } catch (err) {
+                      toast({
+                        title: "Direct API Test Failed",
+                        description: err.message || "Unknown error",
+                        variant: "destructive"
+                      });
+                    } finally {
+                      setIsSending(false);
+                    }
+                  }}
+                >
+                  Test Direct API
+                </Button>
+                
+                <Button 
+                  variant="outline" 
+                  size="sm"
+                  onClick={async () => {
+                    setIsSending(true);
+                    try {
+                      const response = await appwrite.functions.createExecution(
+                        "67ec44660011c13116cd",
+                        JSON.stringify({
+                          to: ["info@justlegalsolutions.org"],
+                          subject: "Function Test",
+                          body: "<p>This is a function test</p>",
+                          apiKey: "re_cKhSe1Ao_7Wyvkcfq6AjC8Ccorq4GeoQA"
+                        })
+                      );
+                      
+                      toast({
+                        title: response.status === "completed" ? "Function Test Completed" : "Function Test Failed",
+                        description: response.status === "completed" ? "Email function executed successfully" : 
+                          `Function failed with status: ${response.status}`,
+                        variant: response.status === "completed" ? "default" : "destructive"
+                      });
+                    } catch (err) {
+                      toast({
+                        title: "Function Test Failed",
+                        description: err.message || "Unknown error",
+                        variant: "destructive"
+                      });
+                    } finally {
+                      setIsSending(false);
+                    }
+                  }}
+                >
+                  Test Function Method
+                </Button>
+                
+                <Button 
+                  variant="outline" 
+                  size="sm"
+                  onClick={async () => {
+                    if (!window.fixClientIdsInServeAttempts) {
+                      toast({
+                        title: "Fix Tool Not Available",
+                        description: "The fix client IDs tool is not available",
+                        variant: "destructive"
+                      });
+                      return;
+                    }
+                    
+                    setIsSending(true);
+                    try {
+                      const result = await window.fixClientIdsInServeAttempts();
+                      toast({
+                        title: "Client ID Fix Complete",
+                        description: result.message,
+                        variant: "default"
+                      });
+                    } catch (err) {
+                      toast({
+                        title: "Fix Failed",
+                        description: err.message || "Unknown error",
+                        variant: "destructive"
+                      });
+                    } finally {
+                      setIsSending(false);
+                    }
+                  }}
+                >
+                  Fix Client IDs in Serves
+                </Button>
+              </div>
+              
+              <p className="text-xs text-gray-500 mt-2">
+                If issues persist, contact support with the console logs.
+              </p>
+            </div>
+          </details>
+        </div>
+
         <CardFooter>
           <Button 
             className="w-full" 
-            onClick={handleSendEmail}
+            onClick={handleSendTestEmail}
             disabled={isSending || !recipientEmail}
           >
             {isSending ? (

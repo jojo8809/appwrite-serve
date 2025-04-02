@@ -24,6 +24,7 @@ import { toast } from "@/hooks/use-toast";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
 import { initializeDebugTools } from '@/utils/debugUtils';
+import { normalizeServeDataArray } from "@/utils/dataNormalization";
 
 // Initialize debug tools for development
 if (process.env.NODE_ENV !== 'production') {
@@ -349,6 +350,12 @@ const AnimatedRoutes = () => {
     try {
       console.log("Adding serve attempt with data:", serveData);
       
+      // Ensure we have required data
+      if (!serveData.clientId) {
+        console.error("Missing clientId in serve data");
+        throw new Error("Client ID is required");
+      }
+      
       // If timestamp is Date object, convert to ISO string for debugging clarity
       const debugData = {
         ...serveData,
@@ -360,19 +367,32 @@ const AnimatedRoutes = () => {
       
       const newServe = await appwrite.createServeAttempt({
         ...serveData,
-        date: serveData.timestamp.toLocaleDateString(),
-        time: serveData.timestamp.toLocaleTimeString(),
-        // timestamp is already set in serveData from NewServe.tsx
+        date: serveData.timestamp ? serveData.timestamp.toLocaleDateString() : new Date().toLocaleDateString(),
+        time: serveData.timestamp ? serveData.timestamp.toLocaleTimeString() : new Date().toLocaleTimeString(),
       });
       
+      // Format the new serve data for local state
       const formattedServe = {
         id: newServe.$id,
         clientId: newServe.client_id,
         imageData: newServe.image_data,
-        coordinates: newServe.coordinates,
+        coordinates: typeof newServe.coordinates === 'string' && newServe.coordinates 
+          ? (() => {
+              const [lat, lng] = newServe.coordinates.split(',').map(Number);
+              return {
+                latitude: lat,
+                longitude: lng,
+                accuracy: 0,
+                altitude: null,
+                altitudeAccuracy: null,
+                heading: null,
+                speed: null
+              };
+            })() 
+          : serveData.coordinates,
         notes: newServe.notes,
         status: newServe.status,
-        timestamp: new Date(newServe.timestamp || newServe.created_at),
+        timestamp: new Date(newServe.timestamp || newServe.created_at || new Date()),
         attemptNumber: serveData.attemptNumber,
         caseNumber: newServe.case_number,
       };
@@ -384,6 +404,11 @@ const AnimatedRoutes = () => {
         description: "Service attempt has been saved successfully",
         variant: "success",
       });
+      
+      // Force a data sync to ensure everything is up to date
+      setTimeout(() => {
+        appwrite.syncAppwriteServesToLocal();
+      }, 500);
       
       return true;
     } catch (error) {
@@ -445,6 +470,11 @@ const AnimatedRoutes = () => {
     }
   };
 
+  const formatServesForDisplay = (serves) => {
+    console.log("Raw serves data in App before passing to History:", serves);
+    return normalizeServeDataArray(serves);
+  };
+
   return (
     <>
       {showAppwriteAlert && (
@@ -486,7 +516,7 @@ const AnimatedRoutes = () => {
           } />
           <Route path="/history" element={
             <History 
-              serves={serves} 
+              serves={formatServesForDisplay(serves)} 
               clients={clients}
               deleteServe={deleteServe}
               updateServe={updateServe}

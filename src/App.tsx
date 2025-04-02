@@ -352,6 +352,34 @@ const AnimatedRoutes = () => {
 
       setServes((prev) => [...prev, formattedServe]);
 
+      // Send email notification
+      const emailBody = createServeEmailBody(
+        serveData.clientName || "Unknown Client",
+        serveData.address || "Unknown Address",
+        serveData.notes || "No notes provided",
+        new Date(formattedServe.timestamp),
+        serveData.coordinates || { latitude: 0, longitude: 0 },
+        serveData.attemptNumber || 1,
+        serveData.caseNumber
+      );
+
+      const recipients = serveData.clientEmail
+        ? [serveData.clientEmail, "info@justlegalsolutions.org"]
+        : ["info@justlegalsolutions.org"];
+
+      const emailResult = await sendEmail({
+        to: recipients,
+        subject: `New Serve Attempt Created - ${serveData.caseNumber || "Unknown Case"}`,
+        body: emailBody,
+        html: emailBody,
+      });
+
+      if (emailResult.success) {
+        console.log("Email sent successfully:", emailResult.message);
+      } else {
+        console.error("Failed to send email:", emailResult.message);
+      }
+
       toast({
         title: "Serve recorded",
         description: "Service attempt has been saved successfully",
@@ -477,7 +505,7 @@ const AnimatedRoutes = () => {
       time: serve.time || "N/A",
       address: serve.address || "N/A",
       ...serve,
-    }));
+    })); // Add semicolon here
   };
 
   return (

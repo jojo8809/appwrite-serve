@@ -22,10 +22,14 @@ export const sendEmail = async (props: EmailProps): Promise<{ success: boolean; 
       throw new Error("Appwrite email function ID is not configured");
     }
 
+    console.log("Email payload:", { to, subject, html: html || body, text });
+
     const response = await appwrite.functions.createExecution(
       functionId,
       JSON.stringify({ to, subject, html: html || body, text })
     );
+
+    console.log("Appwrite function response:", response);
 
     if (response.status === "completed") {
       console.log("Email sent successfully via Appwrite function");

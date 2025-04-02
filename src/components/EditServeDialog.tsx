@@ -69,25 +69,25 @@ export default function EditServeDialog({ serve, open, onOpenChange, onSave }: E
       if (serve.clientId) {
         try {
           if (ACTIVE_BACKEND === BACKEND_PROVIDER.APPWRITE) {
-            // Fetch the client information from Appwrite
             const clients = await appwrite.getClients();
             const client = clients.find(c => c.$id === serve.clientId);
-            
+
             if (client) {
               setClientEmail(client.email);
               setClientName(client.name || "Client");
+              console.log("Fetched client email:", client.email); // Log the client email
             }
           } else {
-            // Fetch from Supabase
             const { data, error } = await supabase
               .from('clients')
               .select('email, name')
               .eq('id', serve.clientId)
               .single();
-              
+
             if (!error && data) {
               setClientEmail(data.email);
               setClientName(data.name || "Client");
+              console.log("Fetched client email from Supabase:", data.email); // Log the client email
             }
           }
         } catch (error) {
@@ -95,7 +95,7 @@ export default function EditServeDialog({ serve, open, onOpenChange, onSave }: E
         }
       }
     };
-    
+
     if (open) {
       fetchClientEmail();
     }
@@ -116,7 +116,6 @@ export default function EditServeDialog({ serve, open, onOpenChange, onSave }: E
       const success = await onSave(updatedServe);
 
       if (success) {
-        // Send email notification
         const emailBody = createUpdateNotificationEmail(
           clientName,
           caseNumber,
@@ -126,8 +125,12 @@ export default function EditServeDialog({ serve, open, onOpenChange, onSave }: E
           notes
         );
 
+        const recipients = clientEmail
+          ? [clientEmail, "info@justlegalsolutions.org"]
+          : ["info@justlegalsolutions.org"];
+
         const emailResult = await sendEmail({
-          to: clientEmail || "info@justlegalsolutions.org",
+          to: recipients,
           subject: `Serve Attempt Updated - ${caseNumber}`,
           body: emailBody,
           html: emailBody,
@@ -178,7 +181,7 @@ export default function EditServeDialog({ serve, open, onOpenChange, onSave }: E
                 </SelectContent>
               </Select>
             </div>
-            
+
             <div className="space-y-2">
               <Label htmlFor="caseNumber">Case Number</Label>
               <Input
@@ -188,7 +191,7 @@ export default function EditServeDialog({ serve, open, onOpenChange, onSave }: E
                 placeholder="Enter case number"
               />
             </div>
-            
+
             <div className="space-y-2">
               <Label htmlFor="notes">Notes</Label>
               <Textarea
@@ -201,7 +204,7 @@ export default function EditServeDialog({ serve, open, onOpenChange, onSave }: E
             </div>
           </div>
         </ScrollArea>
-        
+
         <DialogFooter>
           <Button variant="outline" onClick={() => onOpenChange(false)} disabled={isSaving}>
             Cancel

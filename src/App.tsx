@@ -342,44 +342,119 @@ const AnimatedRoutes = () => {
 
   const createServe = async (serveData) => {
     try {
-      const newServe = await appwrite.createServeAttempt(serveData);
+      console.log("Starting createServe with data:", {
+        clientId: serveData.clientId,
+        clientName: serveData.clientName,
+        clientEmail: serveData.clientEmail,
+        caseNumber: serveData.caseNumber
+      });
 
+      // Ensure we have the client email
+      let clientEmail = serveData.clientEmail;
+      
+      if (!clientEmail && serveData.clientId) {
+        console.log("Client email not provided, attempting to find it");
+        
+        // Try to get from local clients state first
+        const client = clients.find(c => c.id === serveData.clientId);
+        if (client && client.email) {
+          clientEmail = client.email;
+          console.log("Found client email in local state:", clientEmail);
+          serveData.clientEmail = clientEmail;
+        } else {
+          console.log("Client email not found in local state, querying Appwrite");
+          try {
+            // Get client from Appwrite directly
+            const client = await appwrite.databases.getDocument(
+              APPWRITE_CONFIG.databaseId,
+              APPWRITE_CONFIG.collections.clients,
+              serveData.clientId
+            );
+            
+            if (client && client.email) {
+              clientEmail = client.email;
+              console.log("Retrieved client email from Appwrite:", clientEmail);
+              serveData.clientEmail = clientEmail;
+            } else {
+              console.warn("Client found in Appwrite but no email available");
+            }
+          } catch (error) {
+            console.error("Failed to retrieve client from Appwrite:", error);
+          }
+        }
+      }
+
+      // Create the serve attempt in Appwrite
+      console.log("Creating serve attempt in Appwrite database");
+      const newServe = await appwrite.createServeAttempt(serveData);
+      console.log("Serve attempt created successfully:", newServe.$id);
+
+      // Format the serve data for state update
       const formattedServe = {
-        id: newServe.$id, // Map $id to id
+        id: newServe.$id,
         ...newServe,
+        clientEmail: clientEmail,
         timestamp: new Date(newServe.timestamp || new Date()),
       };
 
+      // Update local state
       setServes((prev) => [...prev, formattedServe]);
 
-      // Send email notification
-      const emailBody = createServeEmailBody(
-        serveData.clientName || "Unknown Client",
-        serveData.address || "Unknown Address",
-        serveData.notes || "No notes provided",
-        new Date(formattedServe.timestamp),
-        serveData.coordinates || { latitude: 0, longitude: 0 },
-        serveData.attemptNumber || 1,
-        serveData.caseNumber
-      );
+      // Prepare and send email notification
+      console.log("Preparing email notification for serve attempt");
+      
+      // Extract address from serveData or use a default
+      const address = serveData.address || 
+                      (serveData.coordinates ? `Coordinates: ${serveData.coordinates}` : "No address provided");
 
-      const recipients = serveData.clientEmail
-        ? [serveData.clientEmail, "info@justlegalsolutions.org"]
-        : ["info@justlegalsolutions.org"];
-
-      const emailResult = await sendEmail({
-        to: recipients,
-        subject: `New Serve Attempt Created - ${serveData.caseNumber || "Unknown Case"}`,
-        body: emailBody,
-        html: emailBody,
-      });
-
-      if (emailResult.success) {
-        console.log("Email sent successfully:", emailResult.message);
-      } else {
-        console.error("Failed to send email:", emailResult.message);
+      // Format coordinates for the email
+      let coordinates = { latitude: 0, longitude: 0 };
+      if (serveData.coordinates) {
+        if (typeof serveData.coordinates === 'string') {
+          const [lat, lng] = serveData.coordinates.split(',').map(Number);
+          coordinates = { latitude: lat, longitude: lng };
+        } else if (typeof serveData.coordinates === 'object') {
+          coordinates = serveData.coordinates;
+        }
       }
 
+      // Create the email content
+      const emailBody = createServeEmailBody(
+        serveData.clientName || "Unknown Client",
+        address,
+        serveData.notes || "No notes provided",
+        new Date(formattedServe.timestamp),
+        coordinates,
+        serveData.attemptNumber || 1,
+        serveData.caseNumber || "Unknown Case"
+      );
+
+      // Prepare recipients list
+      const recipients = ["info@justlegalsolutions.org"]; // Always include business email
+      
+      // Add client email if available
+      if (clientEmail && clientEmail !== "info@justlegalsolutions.org") {
+        recipients.push(clientEmail);
+      }
+
+      console.log("Sending email notification to:", recipients);
+      console.log("Email subject:", `New Serve Attempt Created - ${serveData.caseNumber || "Unknown Case"}`);
+
+      // Send the email
+      try {
+        const emailResult = await sendEmail({
+          to: recipients,
+          subject: `New Serve Attempt Created - ${serveData.caseNumber || "Unknown Case"}`,
+          body: emailBody,
+          html: emailBody
+        });
+
+        console.log("Email sending result:", emailResult);
+      } catch (emailError) {
+        console.error("Failed to send email notification:", emailError);
+      }
+
+      // Notify the user
       toast({
         title: "Serve recorded",
         description: "Service attempt has been saved successfully",
@@ -453,32 +528,81 @@ const AnimatedRoutes = () => {
 
   const deleteServe = async (serveId) => {
     try {
-      const serve = serves.find((s) => s.id === serveId);
-      if (!serve) throw new Error("Serve not found");
+      console.log("Attempting to delete serve with ID:", serveId);
+      console.log("Current serves in state:", serves.map(s => ({ id: s.id, $id: s.$id })));
+      
+      // Try to find the serve using both id and $id properties
+      const serve = serves.find((s) => 
+        (s.id === serveId) || 
+        (s.$id === serveId) || 
+        (s.id && s.id.toString() === serveId.toString())
+      );
+      
+      if (!serve) {
+        console.error(`Serve with ID ${serveId} not found in current state`);
+        
+        // Try fetching the serve directly from Appwrite instead
+        try {
+          console.log("Attempting to delete serve directly from Appwrite");
+          await appwrite.deleteServeAttempt(serveId);
+          setServes((prev) => prev.filter((s) => s.id !== serveId));
+          
+          toast({
+            title: "Serve deleted",
+            description: "Service attempt has been removed",
+            variant: "success",
+          });
+          
+          return; // Exit early after successful deletion
+        } catch (directError) {
+          console.error("Error deleting serve directly:", directError);
+          throw new Error(`Serve with ID ${serveId} not found and direct deletion failed`);
+        }
+      }
 
+      console.log("Found serve to delete:", serve);
       await appwrite.deleteServeAttempt(serveId);
 
-      setServes((prev) => prev.filter((s) => s.id !== serveId));
+      setServes((prev) => prev.filter((s) => 
+        s.id !== serveId && 
+        s.$id !== serveId && 
+        s.id?.toString() !== serveId.toString()
+      ));
 
       // Send email notification
-      const emailBody = createDeleteNotificationEmail(
-        serve.clientName,
-        serve.caseNumber,
-        new Date(serve.timestamp),
-        "Serve attempt was deleted by the admin."
-      );
+      try {
+        const emailBody = createDeleteNotificationEmail(
+          serve.clientName || "Unknown Client",
+          serve.caseNumber || "Unknown Case",
+          new Date(serve.timestamp || new Date()),
+          "Serve attempt was deleted by the admin."
+        );
 
-      const emailResult = await sendEmail({
-        to: serve.clientEmail || "info@justlegalsolutions.org",
-        subject: `Serve Attempt Deleted - ${serve.caseNumber}`,
-        body: emailBody,
-        html: emailBody,
-      });
+        // Use default email if client email is missing
+        const recipient = serve.clientEmail || "info@justlegalsolutions.org";
+        const recipients = [recipient];
+        
+        // Add the business email if it's not already included
+        if (recipient !== "info@justlegalsolutions.org") {
+          recipients.push("info@justlegalsolutions.org");
+        }
 
-      if (emailResult.success) {
-        console.log("Email sent successfully:", emailResult.message);
-      } else {
-        console.error("Failed to send email:", emailResult.message);
+        console.log("Sending deletion notification to:", recipients);
+        const emailResult = await sendEmail({
+          to: recipients,
+          subject: `Serve Attempt Deleted - ${serve.caseNumber || "Unknown Case"}`,
+          body: emailBody,
+          html: emailBody,
+        });
+
+        if (emailResult.success) {
+          console.log("Email sent successfully:", emailResult.message);
+        } else {
+          console.error("Failed to send email:", emailResult.message);
+        }
+      } catch (emailError) {
+        console.error("Error sending deletion notification email:", emailError);
+        // Continue with the deletion even if email fails
       }
 
       toast({
@@ -505,7 +629,7 @@ const AnimatedRoutes = () => {
       time: serve.time || "N/A",
       address: serve.address || "N/A",
       ...serve,
-    })); // Add semicolon here
+    }));
   };
 
   return (
@@ -517,7 +641,7 @@ const AnimatedRoutes = () => {
             Unable to connect to Appwrite. Operating in offline mode with local storage.
             <div className="mt-2">
               <Button
-                variant="outline" 
+                variant="outline"
                 size="sm"
                 onClick={() => window.location.reload()}
               >

@@ -39,6 +39,7 @@ export interface ServeAttemptData {
   id?: string;
   clientId: string;
   clientName?: string;
+  clientEmail?: string; // Added client email field
   imageData: string;
   coordinates: GeolocationCoordinates | string;
   notes: string;
@@ -47,6 +48,7 @@ export interface ServeAttemptData {
   attemptNumber: number;
   caseNumber?: string;
   caseName?: string;
+  address?: string; // Added address field
 }
 
 interface ServeAttemptProps {
@@ -293,30 +295,78 @@ const ServeAttempt: React.FC<ServeAttemptProps> = ({
       // Format coordinates as a string
       const formattedCoordinates = `${location.latitude},${location.longitude}`;
 
-      console.log(`Using client ID: ${selectedClient.id} for serve attempt`);
+      // Get client email for local use
+      const clientEmail = selectedClient.email || null;
+      console.log(`Using client email for notifications: ${clientEmail || "Not available"}`);
+      
+      // Get address from selected case for email
+      const address = selectedCase.homeAddress || selectedCase.workAddress || selectedClient.address || "No address available";
 
       const serveData: ServeAttemptData = {
         clientId: selectedClient.id,
         clientName: selectedClient.name,
+        clientEmail: clientEmail, // This will be used only locally, not sent to Appwrite
         caseNumber: selectedCase.caseNumber,
         caseName: selectedCase.caseName || "Unknown Case",
         imageData: imageWithGPS,
         coordinates: formattedCoordinates,
+        address: address,
         notes: data.notes || "",
         timestamp: new Date(),
         status: data.status,
         attemptNumber: caseAttemptCount + 1,
       };
 
-      console.log("Submitting serve attempt with data:", JSON.stringify({
-        ...serveData,
-        imageData: "[IMAGE DATA]",
-      }));
-
+      console.log("Submitting serve attempt data");
       const savedServe = await appwrite.createServeAttempt(serveData);
 
       if (!savedServe) {
         throw new Error("Failed to save serve attempt.");
+      }
+
+      // Now send the email notification directly here
+      try {
+        console.log("Sending email notification");
+        
+        // Create email body
+        const emailBody = createServeEmailBody(
+          serveData.clientName || "Unknown Client",
+          address,
+          serveData.notes || "No notes provided",
+          new Date(),
+          location,
+          serveData.attemptNumber || 1,
+          serveData.caseNumber || "Unknown Case"
+        );
+        
+        // Create recipients array - ALWAYS include your business email
+        const businessEmail = "info@justlegalsolutions.org";
+        const recipients = [businessEmail];
+        
+        // Add client email if available and not the same as business email
+        if (clientEmail && clientEmail !== businessEmail) {
+          recipients.push(clientEmail);
+        }
+        
+        // Log for debugging
+        console.log("Sending notification emails to:", recipients);
+        
+        // Send the email to all recipients
+        const emailResult = await sendEmail({
+          to: recipients,
+          subject: `New Serve Attempt Created - ${serveData.caseNumber || "Unknown Case"}`,
+          body: emailBody,
+          html: emailBody,
+        });
+        
+        if (emailResult.success) {
+          console.log("Email sent successfully to all recipients");
+        } else {
+          console.error("Failed to send email notification:", emailResult.message);
+        }
+      } catch (emailError) {
+        console.error("Error sending notification email:", emailError);
+        // Continue with success even if email fails
       }
 
       await appwrite.syncAppwriteServesToLocal();
@@ -552,14 +602,13 @@ const ServeAttempt: React.FC<ServeAttemptProps> = ({
                             </a>
                           </div>
                         )}
-                        
                         {selectedCase.workAddress && (
                           <div className="space-y-1">
                             <p className="text-xs font-medium">Work Address:</p>
                             <a 
                               href={getMapLink(selectedCase.workAddress)}
                               className="text-xs text-primary hover:underline flex items-center gap-1"
-                              target="_blank" 
+                              target="_blank"
                               rel="noopener noreferrer"
                               onClick={(e) => handleAddressClick(selectedCase.workAddress!, e)}
                             >

@@ -244,7 +244,11 @@ export const appwrite = {
 
   async createServeAttempt(serveData) {
     try {
-      console.log("Creating serve attempt with data:", serveData);
+      console.log("Creating serve attempt in Appwrite with data:", {
+        clientId: serveData.clientId,
+        clientName: serveData.clientName,
+        caseNumber: serveData.caseNumber
+      });
 
       if (!serveData.clientId || serveData.clientId === "unknown") {
         throw new Error("Valid client ID is required for serve attempts.");
@@ -267,18 +271,18 @@ export const appwrite = {
         }
       }
 
-      // Handle the case_number field - required by Appwrite schema
-      const caseNumber = serveData.caseNumber || "Not Specified";
-      
-      // Handle the case_name field - required by Appwrite schema
-      const caseName = serveData.caseName || "Unknown Case";
-      
-      // Handle address - required by Appwrite schema
-      const address = serveData.address || "Not Specified";
+      // Extract address - prioritize from serveData, fallback to case addresses
+      const address = serveData.address || 
+                     (typeof serveData.coordinates === 'string' ? 
+                      `Coordinates: ${serveData.coordinates}` : 
+                      "Address not provided");
 
-      // Format coordinates as string if needed - required by Appwrite schema
-      let coordinates = "0,0"; // Default value to satisfy the required field
-      
+      // Handle case number and name fields
+      const caseNumber = serveData.caseNumber || "Not Specified";
+      const caseName = serveData.caseName || "Unknown Case";
+
+      // Format coordinates
+      let coordinates = "0,0";
       if (serveData.coordinates) {
         if (typeof serveData.coordinates === 'string') {
           coordinates = serveData.coordinates;
@@ -290,54 +294,37 @@ export const appwrite = {
       // Generate document ID
       const documentId = ID.unique();
 
-      // Create document with all required fields
+      // Create document with all required fields - REMOVE client_email as it's not in schema
+      const payload = {
+        client_id: serveData.clientId,
+        client_name: clientName,
+        case_number: caseNumber,
+        case_name: caseName,
+        status: serveData.status || "unknown",
+        notes: serveData.notes || "",
+        address: address,
+        coordinates: coordinates,
+        image_data: serveData.imageData || "",
+        timestamp: serveData.timestamp ? serveData.timestamp.toISOString() : new Date().toISOString(),
+        attempt_number: serveData.attemptNumber || 1,
+      };
+
+      // Store client email in local state but don't send to Appwrite
+      const clientEmail = serveData.clientEmail;
+      console.log("Client email will be stored locally but not in Appwrite:", clientEmail);
+
+      // Create document without client_email field
       const response = await databases.createDocument(
         DATABASE_ID,
         SERVE_ATTEMPTS_COLLECTION_ID,
         documentId,
-        {
-          client_id: serveData.clientId,
-          client_name: clientName,
-          case_number: caseNumber,
-          case_name: caseName,
-          status: serveData.status || "unknown",
-          notes: serveData.notes || "",
-          address: address,
-          coordinates: coordinates,
-          image_data: serveData.imageData || "",
-          timestamp: serveData.timestamp ? serveData.timestamp.toISOString() : new Date().toISOString(),
-          attempt_number: serveData.attemptNumber || 1
-        }
+        payload
       );
 
-      console.log("Serve attempt created successfully:", response.$id);
-      console.log("Document created:", response);
+      // Add the client email back to the response for local use
+      response.clientEmail = clientEmail;
 
-      // Create local version with client name
-      const localServe = {
-        id: response.$id,
-        clientId: serveData.clientId,
-        clientName: clientName,
-        caseNumber: response.case_number || "Unknown",
-        caseName: response.case_name || "Unknown Case",
-        coordinates: response.coordinates || null,
-        notes: response.notes || "",
-        status: response.status || "unknown",
-        timestamp: response.timestamp ? new Date(response.timestamp) : new Date(),
-        attemptNumber: response.attempt_number || 1,
-        imageData: response.image_data || null,
-        address: response.address || "",
-      };
-
-      // Update local storage
-      const existingServes = JSON.parse(localStorage.getItem("serve-tracker-serves") || "[]");
-      existingServes.push(localServe);
-      localStorage.setItem("serve-tracker-serves", JSON.stringify(existingServes));
-      window.dispatchEvent(new CustomEvent("serves-updated"));
-
-      // Debug log the final state
-      console.log("Local serve data saved:", localServe);
-      
+      console.log("Serve attempt created successfully with ID:", response.$id);
       return response;
     } catch (error) {
       console.error("Error creating serve attempt:", error);

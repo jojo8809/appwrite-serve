@@ -15,30 +15,78 @@ export const sendEmail = async (props: EmailProps): Promise<{ success: boolean; 
   const { to, subject, body, html, text } = props;
 
   try {
-    console.log("Sending email via Appwrite function:", { to, subject });
+    // Check if we have valid recipients
+    if (!to || (Array.isArray(to) && to.length === 0)) {
+      console.error("No recipients specified for email");
+      return { success: false, message: "No email recipients specified" };
+    }
+
+    // Format recipients as array if not already
+    const recipients = Array.isArray(to) ? to : [to];
+    console.log("Sending email to recipients:", recipients);
+    console.log("Email subject:", subject);
+    console.log("Email body length:", body?.length || 0);
 
     const functionId = import.meta.env.VITE_APPWRITE_EMAIL_FUNCTION_ID;
+    console.log("Using Appwrite function ID:", functionId);
+    
     if (!functionId) {
-      throw new Error("Appwrite email function ID is not configured");
+      console.error("Email function ID not configured in environment variables");
+      return { success: false, message: "Email function ID not configured" };
     }
 
-    console.log("Email payload:", { to, subject, html: html || body, text });
+    // Prepare payload with all required fields
+    const payload = JSON.stringify({ 
+      to: recipients, 
+      subject, 
+      html: html || body,
+      text: text || body.replace(/<[^>]*>/g, '')  // Fallback plain text by stripping HTML
+    });
 
-    const response = await appwrite.functions.createExecution(
-      functionId,
-      JSON.stringify({ to, subject, html: html || body, text })
-    );
+    console.log("Executing Appwrite function with ID:", functionId);
+    console.log("Email payload size:", payload.length, "bytes");
 
-    console.log("Appwrite function response:", response);
+    try {
+      // Execute the Appwrite function
+      const response = await appwrite.functions.createExecution(
+        functionId,
+        payload
+      );
 
-    if (response.status === "completed") {
-      console.log("Email sent successfully via Appwrite function");
-      return { success: true, message: "Email sent successfully" };
+      console.log("Function execution response:", {
+        status: response.status,
+        response: response.response ? JSON.parse(response.response) : null,
+        logs: response.stdout || "No logs available"
+      });
+      
+      if (response.status === "completed") {
+        try {
+          const responseData = JSON.parse(response.response || "{}");
+          
+          if (responseData.success === false) {
+            console.error("Email function returned success=false:", responseData.message);
+            return { success: false, message: responseData.message || "Unknown error in function response" };
+          }
+          
+          console.log("Email sent successfully to:", recipients);
+          return { success: true, message: "Email sent successfully" };
+        } catch (parseError) {
+          console.warn("Could not parse function response:", parseError);
+          return { success: true, message: "Email sent (response parsing error)" };
+        }
+      }
+
+      console.error("Function execution failed:", response.stderr || "No error details");
+      return { 
+        success: false, 
+        message: `Email function failed: ${response.status}, error: ${response.stderr || "No details"}` 
+      };
+    } catch (functionError) {
+      console.error("Error executing Appwrite function:", functionError);
+      return { success: false, message: `Function execution error: ${functionError.message}` };
     }
-
-    throw new Error(`Function execution failed with status: ${response.status}`);
   } catch (error) {
-    console.error("Error sending email:", error);
+    console.error("General error in email sending:", error);
     return { success: false, message: `Email delivery failed: ${error.message}` };
   }
 };

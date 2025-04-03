@@ -26,7 +26,7 @@ import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
 import { initializeDebugTools } from '@/utils/debugUtils';
 import { normalizeServeDataArray } from "@/utils/dataNormalization";
-import { createServeEmailBody, createDeleteNotificationEmail, createUpdateNotificationEmail } from "@/utils/email";
+import { createServeEmailBody, createDeleteNotificationEmail } from "@/utils/email";
 
 // Initialize debug tools for development
 if (process.env.NODE_ENV !== 'production') {
@@ -479,128 +479,58 @@ const AnimatedRoutes = () => {
     }
   };
 
-const updateServe = async (serveData) => {
-  try {
-    console.log("Starting updateServe with data:", {
-      id: serveData.id,
-      status: serveData.status,
-      clientId: serveData.clientId,
-      caseNumber: serveData.caseNumber
-    });
+  const updateServe = async (serveData) => {
+    try {
+      // Create a proper payload with converted timestamp
+      const timestamp = serveData.timestamp ? 
+        (serveData.timestamp instanceof Date ? 
+          serveData.timestamp : 
+          new Date(serveData.timestamp)) : 
+        new Date();
+      
+      // Prepare the payload without relying on timestamp methods
+      const payload = {
+        client_id: serveData.clientId,
+        case_number: serveData.caseNumber || null,
+        case_name: serveData.caseName || "Unknown Case",
+        status: serveData.status || "unknown",
+        notes: serveData.notes || "",
+        coordinates: serveData.coordinates || null,
+        image_data: serveData.imageData || null,
+        timestamp: timestamp.toISOString(),
+        attempt_number: serveData.attemptNumber || 1
+      };
 
-    // Create proper payload with converted timestamp
-    const timestamp = serveData.timestamp
-      ? serveData.timestamp instanceof Date
-        ? serveData.timestamp
-        : new Date(serveData.timestamp)
-      : new Date();
+      const updatedServe = await appwrite.updateServeAttempt(serveData.id, payload);
 
-    // Prepare payload for Appwrite update
-    const payload = {
-      client_id: serveData.clientId,
-      case_number: serveData.caseNumber || null,
-      case_name: serveData.caseName || "Unknown Case",
-      status: serveData.status || "unknown",
-      notes: serveData.notes || "",
-      coordinates: serveData.coordinates || null,
-      image_data: serveData.imageData || null,
-      timestamp: timestamp.toISOString(),
-      attempt_number: serveData.attemptNumber || 1,
-    };
+      // Ensure the `id` field is preserved
+      const formattedServe = {
+        id: serveData.id,
+        ...updatedServe,
+        timestamp: timestamp
+      };
 
-    console.log("Updating serve attempt in Appwrite with payload:", payload);
-    const updatedServe = await appwrite.updateServeAttempt(serveData.id, payload);
+      setServes((prev) =>
+        prev.map((serve) => (serve.id === serveData.id ? formattedServe : serve))
+      );
 
-    // Update local state
-    const formattedServe = {
-      id: serveData.id,
-      ...updatedServe,
-      timestamp: timestamp,
-    };
+      toast({
+        title: "Serve updated",
+        description: "Service attempt has been updated successfully",
+        variant: "success",
+      });
 
-    setServes((prev) =>
-      prev.map((serve) => (serve.id === serveData.id ? formattedServe : serve))
-    );
-
-    // Send email notification
-    const originalServe = serves.find((s) => s.id === serveData.id);
-    if (!originalServe) {
-      console.warn("Could not find original serve for comparison");
+      return true;
+    } catch (error) {
+      console.error("Error updating serve attempt:", error);
+      toast({
+        title: "Error updating serve attempt",
+        description: error instanceof Error ? error.message : "Unknown error",
+        variant: "destructive",
+      });
+      return false;
     }
-    
-    const oldStatus = originalServe ? originalServe.status : "unknown";
-    const client = clients.find((c) => c.id === serveData.clientId);
-    
-    if (!client) {
-      console.warn("Client not found for serve update:", serveData.clientId);
-    }
-
-    const clientName = client ? client.name : serveData.clientName || "Unknown Client";
-    const clientEmail = client ? client.email : serveData.clientEmail || null;
-
-    console.log("Creating email notification with data:", {
-      clientName,
-      caseNumber: serveData.caseNumber,
-      timestamp,
-      oldStatus,
-      newStatus: serveData.status,
-      hasNotes: !!serveData.notes,
-      caseName: serveData.caseName
-    });
-
-    const emailBody = createUpdateNotificationEmail(
-      clientName,
-      serveData.caseNumber || "Unknown Case",
-      timestamp,
-      oldStatus,
-      serveData.status,
-      serveData.notes || "",
-      serveData.caseName
-    );
-
-    // Prepare recipients array
-    const recipients = ["info@justlegalsolutions.org"];
-    if (clientEmail && clientEmail !== "info@justlegalsolutions.org") {
-      recipients.push(clientEmail);
-    }
-
-    const emailData = {
-      to: recipients,
-      subject: `Serve Attempt Updated - ${serveData.caseNumber || "Unknown Case"}`,
-      html: emailBody,
-      imageData: serveData.imageData
-    };
-
-    console.log("Sending email notification with data:", {
-      recipients: emailData.to,
-      subject: emailData.subject,
-      hasImageData: !!emailData.imageData
-    });
-
-    const emailResult = await appwrite.sendEmailViaFunction(emailData);
-    console.log("Email function response:", emailResult);
-
-    if (!emailResult.success) {
-      throw new Error(emailResult.message || "Failed to send email");
-    }
-
-    toast({
-      title: "Serve updated",
-      description: "Service attempt has been updated successfully",
-      variant: "success",
-    });
-
-    return true;
-  } catch (error) {
-    console.error("Error updating serve attempt:", error);
-    toast({
-      title: "Error updating serve attempt",
-      description: error instanceof Error ? error.message : "Unknown error",
-      variant: "destructive",
-    });
-    return false;
-  }
-};
+  };
 
   const deleteServe = async (serveId: string): Promise<boolean> => {
     try {

@@ -1,232 +1,165 @@
-import { appwrite } from "@/lib/appwrite";
-import { extractBase64 } from "./imageUtils";
-import { uploadImageAndGetUrl } from "./imageStorage";
 
-interface EmailProps {
+import { ServeAttemptData } from "@/components/ServeAttempt";
+import { ID } from "appwrite";
+
+// Base email interface
+export interface EmailData {
   to: string | string[];
   subject: string;
   body: string;
   html?: string;
-  text?: string;
-  serveId?: string; // Add serveId to fetch image_data from Appwrite
+  imageData?: string; // Base64 encoded image data
   imageFormat?: string; // Format of the image (jpeg, png, etc.)
-  imageData?: string; // Add imageData to include image in email
 }
 
-/**
- * Sends an email using the Resend service via Appwrite Cloud Function
- */
-export const sendEmail = async (props: EmailProps): Promise<{ success: boolean; message: string }> => {
-  const { to, subject, body, html, text, serveId, imageFormat = 'jpeg', imageData } = props;
-
-  try {
-    // Check if we have valid recipients
-    if (!to || (Array.isArray(to) && to.length === 0)) {
-      console.error("No recipients specified for email");
-      return { success: false, message: "No email recipients specified" };
-    }
-
-    // Format recipients as array if not already
-    const recipients = Array.isArray(to) ? to : [to];
-    console.log("Sending email to recipients:", recipients);
-    console.log("Email subject:", subject);
-    console.log("Email with serveId:", !!serveId);
-
-    const functionId = import.meta.env.VITE_APPWRITE_EMAIL_FUNCTION_ID;
-    console.log("Using Appwrite function ID:", functionId);
-    
-    if (!functionId) {
-      console.error("Email function ID not configured in environment variables");
-      return { success: false, message: "Email function ID not configured" };
-    }
-
-    // Prepare payload with all required fields
-    const payload = JSON.stringify({ 
-      to: recipients, 
-      subject, 
-      html: html || body,
-      text: text || body.replace(/<[^>]*>/g, ''),
-      serveId,       // Pass serveId if provided
-      imageData,     // <--- NEW: Pass imageData so the function can attach it
-      imageFormat
-    });
-
-    console.log(`Email payload prepared, size: ${payload.length} bytes`);
-
-    // Execute the Appwrite function
-    const response = await appwrite.functions.createExecution(
-      functionId,
-      payload
-    );
-
-    console.log("Function execution response:", {
-      status: response.status,
-      response: response.response ? JSON.parse(response.response) : null,
-      logs: response.stdout || "No logs available"
-    });
-    
-    if (response.status === "completed") {
-      try {
-        const responseData = JSON.parse(response.response || "{}");
-        
-        if (responseData.success === false) {
-          console.error("Email function returned success=false:", responseData.message);
-          return { success: false, message: responseData.message || "Unknown error in function response" };
-        }
-        
-        console.log("Email sent successfully to:", recipients);
-        return { success: true, message: "Email sent successfully" };
-      } catch (parseError) {
-        console.warn("Could not parse function response:", parseError);
-        return { success: true, message: "Email sent (response parsing error)" };
-      }
-    }
-
-    console.error("Function execution failed:", response.stderr || "No error details");
-    return { 
-      success: false, 
-      message: `Email function failed: ${response.status}, error: ${response.stderr || "No details"}` 
-    };
-  } catch (error) {
-    console.error("General error in email sending:", error);
-    return { success: false, message: `Email delivery failed: ${error.message}` };
-  }
-};
-
-/**
- * Creates a formatted email body for a serve attempt
- */
+// Create an email for serve attempt notifications
 export const createServeEmailBody = (
   clientName: string,
   address: string,
   notes: string,
   timestamp: Date,
-  coords: GeolocationCoordinates,
+  coordinates: { latitude: number; longitude: number } | null,
   attemptNumber: number,
-  caseNumber?: string,
-  imageData?: string // Add optional image data parameter
+  caseNumber: string
 ): string => {
-  const googleMapsUrl = `https://www.google.com/maps?q=${coords.latitude},${coords.longitude}`;
-  
-  // Include image in email body if available
-  const imageSection = imageData ? `
-    <div class="detail">
-      <span class="label">Photo Evidence:</span>
-      <div style="margin-top: 10px;">
-        <img src="${imageData}" alt="Serve Attempt Evidence" style="max-width: 100%; border: 1px solid #ddd; border-radius: 4px;" />
+  const googleMapsLink = coordinates
+    ? `https://www.google.com/maps?q=${coordinates.latitude},${coordinates.longitude}`
+    : "";
+
+  return `
+    <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px; border: 1px solid #e0e0e0; border-radius: 5px;">
+      <h2 style="color: #4f46e5; margin-bottom: 20px;">New Serve Attempt Recorded</h2>
+      
+      <p><strong>Case:</strong> ${caseNumber}</p>
+      <p><strong>Client:</strong> ${clientName}</p>
+      <p><strong>Date/Time:</strong> ${timestamp.toLocaleString()}</p>
+      <p><strong>Attempt #:</strong> ${attemptNumber}</p>
+      <p><strong>Location:</strong> ${address}</p>
+      ${googleMapsLink ? `<p><a href="${googleMapsLink}" target="_blank">View on Google Maps</a></p>` : ''}
+      
+      <div style="margin-top: 20px; background-color: #f5f5f5; padding: 15px; border-radius: 5px;">
+        <h3 style="margin-top: 0; color: #4f46e5;">Notes:</h3>
+        <p style="white-space: pre-line;">${notes || "No notes provided"}</p>
       </div>
+      
+      <p style="margin-top: 30px; color: #666; font-size: 12px;">
+        This is an automated notification from JLS Process Server Pro.
+      </p>
     </div>
-  ` : '';
-
-  return `
-<!DOCTYPE html>
-<html>
-<head>
-  <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Process Serve Attempt</title>
-  <style>
-    body { font-family: Arial, sans-serif; line-height: 1.6; color: #333; }
-    h1 { color: #2c3e50; }
-    .container { max-width: 600px; margin: 0 auto; padding: 20px; }
-    .detail { margin-bottom: 10px; }
-    .label { font-weight: bold; }
-    .notes { background-color: #f9f9f9; padding: 10px; border-left: 4px solid #ddd; }
-    .footer { margin-top: 30px; padding-top: 10px; border-top: 1px solid #eee; font-size: 12px; color: #777; }
-    a { color: #3498db; }
-  </style>
-</head>
-<body>
-  <div class="container">
-    <h1>Process Serve Attempt #${attemptNumber}</h1>
-    
-    <div class="detail">
-      <span class="label">Client:</span> ${clientName}
-    </div>
-    
-    <div class="detail">
-      <span class="label">Address:</span> ${address}
-    </div>
-    
-    ${caseNumber ? `
-    <div class="detail">
-      <span class="label">Case Number:</span> ${caseNumber}
-    </div>
-    ` : ""}
-    
-    <div class="detail">
-      <span class="label">Date:</span> ${timestamp.toLocaleString()}
-    </div>
-    
-    <div class="detail">
-      <span class="label">GPS Coordinates:</span> ${coords.latitude.toFixed(6)}, ${coords.longitude.toFixed(6)}
-    </div>
-    
-    <div class="detail">
-      <span class="label">Location Link:</span> <a href="${googleMapsUrl}" target="_blank">${googleMapsUrl}</a>
-    </div>
-    
-    ${imageSection}
-    
-    <div class="detail">
-      <span class="label">Notes:</span>
-      <div class="notes">${notes || "No additional notes"}</div>
-    </div>
-    
-    <div class="footer">
-      This is an automated message from ServeTracker.
-    </div>
-  </div>
-</body>
-</html>
   `;
 };
 
-/**
- * Creates a notification email for serve attempt deletion
- */
-export const createDeleteNotificationEmail = (
-  clientName: string,
-  caseNumber: string,
-  serveDate: Date,
-  deleteReason?: string
-): string => {
-  return `
-Serve Attempt Deleted
-
-Client: ${clientName}
-Case: ${caseNumber}
-Original Serve Date: ${serveDate.toLocaleString()}
-${deleteReason ? `\nReason for deletion: ${deleteReason}\n` : ''}
-
-This serve attempt has been permanently removed from the system.
-
----
-This is an automated message from ServeTracker.
-  `;
-};
-
-/**
- * Creates a notification email for serve attempt updates
- */
+// Create an email for serve attempt updates
 export const createUpdateNotificationEmail = (
   clientName: string,
   caseNumber: string,
-  serveDate: Date,
+  timestamp: Date,
   oldStatus: string,
   newStatus: string,
-  notes?: string
+  notes: string
 ): string => {
   return `
-Serve Attempt Updated
-
-Client: ${clientName}
-Case: ${caseNumber}
-Serve Date: ${serveDate.toLocaleString()}
-Status: Changed from "${oldStatus}" to "${newStatus}"
-${notes ? `\nNotes: ${notes}\n` : ''}
-
----
-This is an automated message from ServeTracker.
+    <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px; border: 1px solid #e0e0e0; border-radius: 5px;">
+      <h2 style="color: #4f46e5; margin-bottom: 20px;">Serve Attempt Updated</h2>
+      
+      <p><strong>Case:</strong> ${caseNumber}</p>
+      <p><strong>Client:</strong> ${clientName}</p>
+      <p><strong>Date/Time:</strong> ${timestamp.toLocaleString()}</p>
+      <p><strong>Status Change:</strong> ${oldStatus} → ${newStatus}</p>
+      
+      <div style="margin-top: 20px; background-color: #f5f5f5; padding: 15px; border-radius: 5px;">
+        <h3 style="margin-top: 0; color: #4f46e5;">Updated Notes:</h3>
+        <p style="white-space: pre-line;">${notes || "No notes provided"}</p>
+      </div>
+      
+      <p style="margin-top: 30px; color: #666; font-size: 12px;">
+        This is an automated notification from JLS Process Server Pro.
+      </p>
+    </div>
   `;
 };
+
+// Create an email for serve attempt deletions
+export const createDeleteNotificationEmail = (
+  clientName: string,
+  caseNumber: string,
+  timestamp: Date,
+  reason?: string
+): string => {
+  return `
+    <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px; border: 1px solid #e0e0e0; border-radius: 5px;">
+      <h2 style="color: #e53e3e; margin-bottom: 20px;">Serve Attempt Deleted</h2>
+      
+      <p><strong>Case:</strong> ${caseNumber}</p>
+      <p><strong>Client:</strong> ${clientName}</p>
+      <p><strong>Original Date/Time:</strong> ${timestamp.toLocaleString()}</p>
+      
+      ${reason ? `
+      <div style="margin-top: 20px; background-color: #f5f5f5; padding: 15px; border-radius: 5px;">
+        <h3 style="margin-top: 0; color: #e53e3e;">Reason:</h3>
+        <p>${reason}</p>
+      </div>
+      ` : ''}
+      
+      <p style="margin-top: 30px; color: #666; font-size: 12px;">
+        This is an automated notification from JLS Process Server Pro.
+      </p>
+    </div>
+  `;
+};
+
+// Function to send email
+export async function sendEmail(emailData: EmailData): Promise<{ success: boolean; message: string }> {
+  try {
+    console.log("Sending email:", {
+      to: emailData.to,
+      subject: emailData.subject,
+      hasImage: !!emailData.imageData
+    });
+
+    // Check if we have image data that starts with a data URL
+    if (emailData.imageData && emailData.imageData.startsWith('data:image')) {
+      console.log("Processing image data URL...");
+      // Extract the base64 part from the data URL
+      const matches = emailData.imageData.match(/^data:image\/(png|jpeg|jpg|gif);base64,(.+)$/);
+      
+      if (matches && matches.length === 3) {
+        const imageFormat = matches[1];
+        const base64Data = matches[2];
+        
+        console.log(`Image format detected: ${imageFormat}`);
+        console.log(`Base64 data length: ${base64Data.length}`);
+        
+        // Update the emailData with the extracted base64 data
+        emailData.imageData = base64Data;
+        emailData.imageFormat = imageFormat;
+      } else {
+        console.warn("Image data URL is not in the expected format");
+      }
+    }
+
+    // Send to our API endpoint
+    const response = await fetch('/api/email/send', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify(emailData),
+    });
+
+    const data = await response.json();
+    console.log("Email sending response:", data);
+
+    if (!response.ok) {
+      throw new Error(data.message || 'Failed to send email');
+    }
+
+    return { success: true, message: 'Email sent successfully' };
+  } catch (error) {
+    console.error('Error sending email:', error);
+    return { 
+      success: false, 
+      message: error instanceof Error ? error.message : 'Unknown error sending email' 
+    };
+  }
+}

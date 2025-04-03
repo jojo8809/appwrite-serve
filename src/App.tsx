@@ -19,13 +19,13 @@ import {
   clearLocalStorage,
   getActiveBackend,
 } from "./utils/dataSwitch";
-import { BACKEND_PROVIDER, APPWRITE_CONFIG } from "./config/backendConfig";
+import { ACTIVE_BACKEND, BACKEND_PROVIDER } from './config/backendConfig';
 import { toast } from "@/hooks/use-toast";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
 import { initializeDebugTools } from '@/utils/debugUtils';
 import { normalizeServeDataArray } from "@/utils/dataNormalization";
-import { sendEmail, createDeleteNotificationEmail } from "@/utils/email";
+import { sendEmail, createServeEmailBody, createDeleteNotificationEmail } from "@/utils/email";
 
 // Initialize debug tools for development
 if (process.env.NODE_ENV !== 'production') {
@@ -45,9 +45,9 @@ window.debugAppwrite = function() {
   console.log('Appwrite Config:', {
     endpoint: import.meta.env.VITE_APPWRITE_ENDPOINT || "https://cloud.appwrite.io/v1",
     projectId: import.meta.env.VITE_APPWRITE_PROJECT_ID || "67ead974001245b7c6aa",
-    databaseId: import.meta.env.VITE_APPWRITE_DATABASE_ID || "67eae6fe0020c6721531", // Correct databaseId
+    databaseId: import.meta.env.VITE_APPWRITE_DATABASE_ID || "67eae6fe0020c6721531",
     clientsCollectionId: import.meta.env.VITE_APPWRITE_CLIENTS_COLLECTION_ID || "67eae70e000c042112c8",
-    serveAttemptsCollectionId: import.meta.env.VITE_APPWRITE_SERVE_ATTEMPTS_COLLECTION_ID || "67eae7ef8034c7ad35f6", // Correct collectionId
+    serveAttemptsCollectionId: import.meta.env.VITE_APPWRITE_SERVE_ATTEMPTS_COLLECTION_ID || "67eae7ef8034c7ad35f6",
   });
   
   // Test API
@@ -292,21 +292,17 @@ const AnimatedRoutes = () => {
     }
   };
 
-  const deleteClient = async (clientId) => {
+  const deleteClient = async (clientId: string): Promise<boolean> => {
     try {
       console.log(`Starting deletion process for client ${clientId}`);
 
       // First delete serve attempts
       const serveAttempts = await appwrite.getServeAttempts();
-      const clientServes = serveAttempts.filter(serve => serve.client_id === clientId);
+      const clientServes = serveAttempts.filter(serve => serve.clientId === clientId);
       console.log(`Found ${clientServes.length} serve attempts to delete`);
 
       for (const serve of clientServes) {
-        if (!serve.$id) {
-          console.warn("Skipping serve attempt with missing ID:", serve);
-          continue;
-        }
-        await appwrite.deleteServeAttempt(serve.$id);
+        await appwrite.deleteServeAttempt(serve.id);
       }
 
       // Delete documents
@@ -330,6 +326,8 @@ const AnimatedRoutes = () => {
         description: "Client and associated data have been removed",
         variant: "success",
       });
+      
+      return true;
     } catch (error) {
       console.error("Error deleting client:", error);
       toast({
@@ -337,6 +335,7 @@ const AnimatedRoutes = () => {
         description: error instanceof Error ? error.message : "Unknown error",
         variant: "destructive",
       });
+      return false;
     }
   };
 
@@ -366,8 +365,8 @@ const AnimatedRoutes = () => {
           try {
             // Get client from Appwrite directly
             const client = await appwrite.databases.getDocument(
-              APPWRITE_CONFIG.databaseId,
-              APPWRITE_CONFIG.collections.clients,
+              appwrite.DATABASE_ID,
+              appwrite.collections.clients,
               serveData.clientId
             );
             
@@ -387,11 +386,11 @@ const AnimatedRoutes = () => {
       // Create the serve attempt in Appwrite
       console.log("Creating serve attempt in Appwrite database");
       const newServe = await appwrite.createServeAttempt(serveData);
-      console.log("Serve attempt created successfully:", newServe.$id);
+      console.log("Serve attempt created successfully:", newServe.id);
 
       // Format the serve data for state update
       const formattedServe = {
-        id: newServe.$id,
+        id: newServe.id || newServe.$id,
         ...newServe,
         clientEmail: clientEmail,
         timestamp: new Date(newServe.timestamp || new Date()),
@@ -446,7 +445,8 @@ const AnimatedRoutes = () => {
           to: recipients,
           subject: `New Serve Attempt Created - ${serveData.caseNumber || "Unknown Case"}`,
           body: emailBody,
-          html: emailBody
+          html: emailBody,
+          imageData: serveData.imageData
         });
 
         console.log("Email sending result:", emailResult);
@@ -526,17 +526,13 @@ const AnimatedRoutes = () => {
     }
   };
 
-  const deleteServe = async (serveId) => {
+  const deleteServe = async (serveId: string): Promise<boolean> => {
     try {
       console.log("Attempting to delete serve with ID:", serveId);
-      console.log("Current serves in state:", serves.map(s => ({ id: s.id, $id: s.$id })));
+      console.log("Current serves in state:", serves.map(s => ({ id: s.id })));
       
-      // Try to find the serve using both id and $id properties
-      const serve = serves.find((s) => 
-        (s.id === serveId) || 
-        (s.$id === serveId) || 
-        (s.id && s.id.toString() === serveId.toString())
-      );
+      // Try to find the serve
+      const serve = serves.find((s) => s.id === serveId);
       
       if (!serve) {
         console.error(`Serve with ID ${serveId} not found in current state`);
@@ -553,7 +549,7 @@ const AnimatedRoutes = () => {
             variant: "success",
           });
           
-          return; // Exit early after successful deletion
+          return true; // Exit early after successful deletion
         } catch (directError) {
           console.error("Error deleting serve directly:", directError);
           throw new Error(`Serve with ID ${serveId} not found and direct deletion failed`);
@@ -563,11 +559,7 @@ const AnimatedRoutes = () => {
       console.log("Found serve to delete:", serve);
       await appwrite.deleteServeAttempt(serveId);
 
-      setServes((prev) => prev.filter((s) => 
-        s.id !== serveId && 
-        s.$id !== serveId && 
-        s.id?.toString() !== serveId.toString()
-      ));
+      setServes((prev) => prev.filter((s) => s.id !== serveId));
 
       // Send email notification
       try {
@@ -610,6 +602,8 @@ const AnimatedRoutes = () => {
         description: "Service attempt has been removed",
         variant: "success",
       });
+      
+      return true;
     } catch (error) {
       console.error("Error deleting serve attempt:", error);
       toast({
@@ -617,19 +611,13 @@ const AnimatedRoutes = () => {
         description: error instanceof Error ? error.message : "Unknown error",
         variant: "destructive",
       });
+      return false;
     }
   };
 
   const formatServesForDisplay = (serves) => {
     const normalizedServes = normalizeServeDataArray(serves);
-    return normalizedServes.map((serve) => ({
-      id: serve.id || "unknown", // Fallback to "unknown" if `id` is missing
-      clientId: serve.clientId || "unknown",
-      date: serve.date || "N/A",
-      time: serve.time || "N/A",
-      address: serve.address || "N/A",
-      ...serve,
-    }));
+    return normalizedServes;
   };
 
   return (
@@ -653,7 +641,7 @@ const AnimatedRoutes = () => {
       )}
       <Routes location={location}>
         <Route element={<Layout />}>
-          <Route path="/" element={<Index />} />
+          <Route path="/" element={<Dashboard clients={clients} serves={serves} />} />
           <Route path="/dashboard" element={
             <Dashboard clients={clients} serves={serves} />
           } />

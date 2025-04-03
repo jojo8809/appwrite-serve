@@ -1,4 +1,3 @@
-
 import { Client, Account, Databases, Storage, ID, Query, Teams, Functions } from 'appwrite';
 import { APPWRITE_CONFIG } from '@/config/backendConfig';
 
@@ -33,6 +32,7 @@ export const appwrite = {
   teams,
   functions,
   DATABASE_ID,
+  collections: APPWRITE_CONFIG.collections,
   CLIENTS_COLLECTION_ID,
   SERVE_ATTEMPTS_COLLECTION_ID,
   CASES_COLLECTION_ID,
@@ -49,56 +49,120 @@ export const appwrite = {
         hasImageData: !!payload.imageData,
       });
 
-      // Direct HTTP API call for messaging (since SDK might not support it yet)
-      const endpoint = `${client.config.endpoint}/messaging/topics/${topicId}/subscribers`;
-      
-      const headers = {
-        'Content-Type': 'application/json',
-        'X-Appwrite-Project': client.config.project,
-        // Add authentication header if needed
-        'X-Appwrite-Key': client.config.key, // Only if running server-side
-      };
-      
-      // Create the message data
-      const messageData = {
-        userId: 'unique',
-        providerId: providerId,
-        providerType: 'smtp',
-        targetId: payload.recipients,
-        content: {
-          subject: payload.subject,
-          html: payload.content,
-        },
-        metadata: payload.metadata,
-      };
-      
-      // If we have an image, add it to the message
-      if (payload.imageData) {
-        messageData.content.attachments = [{
-          content: payload.imageData,
-          filename: 'serve_evidence.jpeg',
-          disposition: 'attachment'
-        }];
+      // Check if we have the necessary data
+      if (!payload.subject || !payload.content || !payload.recipients) {
+        throw new Error("Missing required fields for email: subject, content, or recipients");
       }
-      
-      // Make the API request
-      const response = await fetch(endpoint, {
-        method: 'POST',
-        headers: headers,
-        body: JSON.stringify(messageData),
-      });
-      
-      if (!response.ok) {
-        const errorData = await response.json();
-        throw new Error(`Failed to send message: ${errorData.message || response.statusText}`);
+
+      try {
+        // Using Appwrite functions to send the email via the topic subscription
+        const result = await functions.createExecution(
+          "sendEmail",
+          JSON.stringify({
+            subject: payload.subject,
+            html: payload.content,
+            to: payload.recipients.split(", ")
+          }),
+          false, // async execution
+          "", // no path
+          "POST", // method
+          {} // no headers
+        );
+        
+        console.log("Email function execution result:", result);
+        
+        // If execution was successfully created but we need to check for its status
+        if (result.$id) {
+          return { 
+            success: true,
+            id: result.$id,
+            message: "Email send request has been queued"
+          };
+        } else {
+          throw new Error("Function execution created but no ID returned");
+        }
+      } catch (fnError) {
+        console.error("Error executing email function:", fnError);
+        
+        // Fallback to direct messaging API
+        console.log("Falling back to direct messaging API call");
+        
+        // If function execution fails, try direct API call
+        const endpoint = `${client.config.endpoint}/messaging/topics/${topicId}/subscribers`;
+        
+        const headers = {
+          'Content-Type': 'application/json',
+          'X-Appwrite-Project': client.config.project,
+        };
+        
+        if (client.config.key) {
+          headers['X-Appwrite-Key'] = client.config.key;
+        } else if (client.config.jwt) {
+          headers['X-Appwrite-JWT'] = client.config.jwt;
+        }
+        
+        // Create the message data
+        const messageData = {
+          userId: 'unique',
+          providerType: 'smtp',
+          providerId: providerId,
+          targetId: payload.recipients,
+          content: {
+            subject: payload.subject,
+            html: payload.content,
+          },
+          metadata: payload.metadata || {},
+        };
+        
+        // If we have an image, add it to the message
+        if (payload.imageData) {
+          messageData.content.attachments = [{
+            content: payload.imageData,
+            filename: 'serve_evidence.jpeg',
+            disposition: 'attachment'
+          }];
+        }
+        
+        // Make the API request
+        const response = await fetch(endpoint, {
+          method: 'POST',
+          headers: headers,
+          body: JSON.stringify(messageData),
+        });
+        
+        if (!response.ok) {
+          const errorData = await response.json();
+          throw new Error(`Failed to send message: ${errorData.message || response.statusText}`);
+        }
+        
+        const result = await response.json();
+        console.log("Message sent successfully via API:", result);
+        return result;
       }
-      
-      const result = await response.json();
-      console.log("Message sent successfully:", result);
-      return result;
     } catch (error) {
       console.error("Error sending message:", error);
       throw error;
+    }
+  },
+
+  // Add a method to call the Appwrite email function
+  async sendEmailViaFunction(emailData) {
+    try {
+      const response = await functions.createExecution(
+        "67ed8899003a8b119a18", // Correct function ID
+        JSON.stringify(emailData)
+      );
+
+      if (response.status === "completed") {
+        console.log("Email function executed successfully:", response);
+        return { success: true, message: "Email sent successfully" };
+      } else {
+        console.error("Email function execution failed:", response);
+        return { success: false, message: "Email function execution failed" };
+      }
+    } catch (error) {
+      console.error("Error calling email function:", error);
+      return { success: false, message: error.message };
     }
   },
 
@@ -270,6 +334,7 @@ export const appwrite = {
         timestamp: doc.timestamp ? new Date(doc.timestamp) : new Date(),
         attemptNumber: doc.attempt_number || 1,
         imageData: doc.image_data || null,
+        address: doc.address || "",
       })).sort((a, b) => b.timestamp.getTime() - a.timestamp.getTime());
       
       return formattedServes;
@@ -299,6 +364,7 @@ export const appwrite = {
         timestamp: doc.timestamp ? new Date(doc.timestamp) : new Date(),
         attemptNumber: doc.attempt_number || 1,
         imageData: doc.image_data || null,
+        address: doc.address || "",
       })).sort((a, b) => b.timestamp.getTime() - a.timestamp.getTime());
     } catch (error) {
       console.error(`Error fetching serve attempts for client ${clientId}:`, error);
@@ -311,7 +377,8 @@ export const appwrite = {
       console.log("Creating serve attempt in Appwrite with data:", {
         clientId: serveData.clientId,
         clientName: serveData.clientName,
-        caseNumber: serveData.caseNumber
+        caseNumber: serveData.caseNumber,
+        caseName: serveData.caseName
       });
 
       if (!serveData.clientId || serveData.clientId === "unknown") {
@@ -429,9 +496,14 @@ export const appwrite = {
       if (serveData.caseNumber !== undefined && serveData.caseNumber !== originalDoc.case_number) 
         updateData.case_number = serveData.caseNumber;
       
-      // Handle Appwrite's snake_case format
+      if (serveData.caseName !== undefined && serveData.caseName !== originalDoc.case_name) 
+        updateData.case_name = serveData.caseName;
+      
       if (serveData.case_number !== undefined && serveData.case_number !== originalDoc.case_number) 
         updateData.case_number = serveData.case_number;
+      
+      if (serveData.case_name !== undefined && serveData.case_name !== originalDoc.case_name) 
+        updateData.case_name = serveData.case_name;
       
       // Never update these fields when editing to preserve original data
       // - timestamp (preserve original)
@@ -551,6 +623,7 @@ export const appwrite = {
         timestamp: doc.timestamp ? new Date(doc.timestamp) : new Date(),
         attemptNumber: doc.attempt_number || 1,
         imageData: doc.image_data || null,
+        address: doc.address || "",
       })).sort((a, b) => b.timestamp.getTime() - a.timestamp.getTime());
 
       // Store in local storage

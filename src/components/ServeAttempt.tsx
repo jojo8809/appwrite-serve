@@ -26,7 +26,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import CameraComponent from "./Camera";
 import { embedGpsIntoImage } from "@/utils/gps";
 import { formatCoordinates } from "@/utils/gps";
-import { sendEmail, createServeEmailBody } from "@/utils/email";
+import { createServeEmailBody } from "@/utils/email";
 import { useToast } from "@/components/ui/use-toast";
 import { MapPin, Mail, Camera, AlertCircle, CheckCircle, Loader2, ExternalLink, Search } from "lucide-react";
 import { getClientCases, getServeAttemptsCount } from "@/utils/appwriteStorage";
@@ -291,86 +291,72 @@ const ServeAttempt: React.FC<ServeAttemptProps> = ({
     setIsSending(true);
 
     try {
+      // Debug the captured image data
+      console.log("Captured image data before encoding:", capturedImage);
+
       const imageWithGPS = embedGpsIntoImage(capturedImage, location);
 
-      // Debug the image data for troubleshooting
-      console.log("Image with GPS data properties:");
-      debugImageData(imageWithGPS);
+      // Validate Base64 encoding
+      let base64ForValidation = imageWithGPS;
+      // Check if it's a data URL and extract just the Base64 part if needed
+      if (base64ForValidation.startsWith('data:') && base64ForValidation.includes('base64,')) {
+        base64ForValidation = base64ForValidation.split('base64,')[1];
+      }
 
-      // Format coordinates as a string
-      const formattedCoordinates = `${location.latitude},${location.longitude}`;
-
-      // Get client email for local use
-      const clientEmail = selectedClient.email || null;
-      console.log(`Using client email for notifications: ${clientEmail || "Not available"}`);
-      
-      // Get address from selected case for email
-      const address = selectedCase.homeAddress || selectedCase.workAddress || selectedClient.address || "No address available";
+      const isValidBase64 = /^[A-Za-z0-9+/=]+$/.test(base64ForValidation);
+      if (!isValidBase64) {
+        console.error("Invalid Base64 encoding detected in captured image data");
+        throw new Error("Invalid Base64 encoding in captured image data");
+      }
 
       const serveData: ServeAttemptData = {
         clientId: selectedClient.id,
         clientName: selectedClient.name,
-        clientEmail: clientEmail,
+        clientEmail: selectedClient.email || null,
         caseNumber: selectedCase.caseNumber,
         caseName: selectedCase.caseName || "Unknown Case",
         imageData: imageWithGPS,
-        coordinates: formattedCoordinates,
-        address: address,
+        coordinates: `${location.latitude},${location.longitude}`,
+        address: selectedCase.homeAddress || selectedCase.workAddress || selectedClient.address || "No address available",
         notes: data.notes || "",
         timestamp: new Date(),
         status: data.status,
         attemptNumber: caseAttemptCount + 1,
       };
 
-      console.log("Submitting serve attempt data");
-      const savedServe = await appwrite.createServeAttempt(serveData);
+      console.log("Submitting serve attempt data:", serveData);
 
-      if (!savedServe) {
-        throw new Error("Failed to save serve attempt.");
+      // Send email notification
+      const emailBody = createServeEmailBody(
+        serveData.clientName || "Unknown Client",
+        serveData.address || "No address available",
+        serveData.notes || "No notes provided",
+        serveData.timestamp,
+        location,
+        serveData.attemptNumber,
+        serveData.caseNumber || "Unknown Case",
+        serveData.caseName
+      );
+
+      // Prepare the email data
+      const emailData = {
+        to: [
+          serveData.clientEmail || "info@justlegalsolutions.org", 
+          "info@justlegalsolutions.org" // Always include the business email
+        ],
+        subject: `Serve Attempt Notification - ${serveData.caseNumber}`,
+        html: emailBody,
+        imageData: serveData.imageData,
+      };
+
+      console.log("Sending email notification to:", emailData.to);
+      const emailResult = await appwrite.sendEmailViaFunction(emailData);
+
+      if (emailResult.success) {
+        console.log("Email sent successfully:", emailResult.message);
+      } else {
+        console.error("Failed to send email:", emailResult.message);
       }
-
-      // Now send the message notification directly here
-      try {
-        console.log("Preparing to send notification message with image");
-        
-        // Create message body without embedding the image
-        const emailBody = createServeEmailBody(
-          serveData.clientName || "Unknown Client",
-          address,
-          serveData.notes || "No notes provided",
-          new Date(),
-          location,
-          serveData.attemptNumber || 1,
-          serveData.caseNumber || "Unknown Case"
-        );
-        
-        // Set up recipients
-        const businessEmail = "info@justlegalsolutions.org";
-        const recipients = [businessEmail];
-        
-        if (clientEmail && clientEmail !== businessEmail) {
-          recipients.push(clientEmail);
-        }
-        
-        console.log(`Sending message to ${recipients.length} recipients with photo attachment`);
-        
-        // Include the image as an attachment 
-        const emailResult = await sendEmail({
-          to: recipients,
-          subject: `New Serve Attempt Created - ${serveData.caseNumber || "Unknown Case"}`,
-          body: emailBody,
-          html: emailBody,
-          imageData: imageWithGPS,
-          imageFormat: 'jpeg'
-        });
-        
-        console.log("Message sending result:", emailResult);
-      } catch (messageError) {
-        console.error("Error sending notification message:", messageError);
-        // Continue with success even if message fails
-      }
-
-      await appwrite.syncAppwriteServesToLocal();
 
       toast({
         title: "Serve recorded",

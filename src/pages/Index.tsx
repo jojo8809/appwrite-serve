@@ -1,17 +1,14 @@
+
 import React, { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
 import { useToast } from "@/hooks/use-toast";
-import { sendMessage } from "@/utils/email";
 import { testEmailFunctionality } from "@/utils/testEmail";
 import { Loader2, Mail, CheckCircle, XCircle } from "lucide-react";
 import { isAppwriteConfigured } from "@/config/backendConfig";
-import { appwrite } from "@/lib/appwrite";
 
 export default function Index() {
-  const [email, setEmail] = useState("");
   const [sending, setSending] = useState(false);
   const [result, setResult] = useState<any>(null);
   const navigate = useNavigate();
@@ -35,11 +32,6 @@ export default function Index() {
 
     try {
       console.log("Starting message send attempt...");
-      console.log("Message details:", {
-        to: email,
-        subject: "Test Message from ServeTracker",
-        bodyLength: email.length
-      });
       
       const result = await testEmailFunctionality();
       
@@ -49,11 +41,11 @@ export default function Index() {
         setResult(result);
         toast({
           title: "Message sent successfully",
-          description: `Message was sent to ${email}`,
+          description: "Test message was sent to business email",
           variant: "default"
         });
       } else {
-        setResult(result);
+        setResult({ error: result.message });
         toast({
           title: "Failed to send message",
           description: result.message,
@@ -87,22 +79,14 @@ export default function Index() {
         <CardContent className="space-y-4">
           <div className="space-y-2">
             <label htmlFor="email" className="text-sm font-medium">
-              Email
+              Test Configuration
             </label>
-            <Input
-              id="email"
-              type="email"
-              placeholder="Enter email address"
-              value={email}
-              onChange={(e) => setEmail(e.target.value)}
-              disabled={sending}
-            />
             <p className="text-xs text-gray-500 mt-1">
-              The business email (info@justlegalsolutions.org) will automatically be added as a recipient.
+              The test will send a message to the business email (info@justlegalsolutions.org).
             </p>
           </div>
           
-          {result && (
+          {result && !result.error && (
             <div className="bg-green-50 p-3 rounded-md flex items-center gap-2">
               <CheckCircle className="h-5 w-5 text-green-500" />
               <p className="text-green-700 text-sm">Message sent successfully!</p>
@@ -124,7 +108,7 @@ export default function Index() {
           <Button 
             className="w-full" 
             onClick={handleSendTestMessage}
-            disabled={sending || !email}
+            disabled={sending}
           >
             {sending ? (
               <>

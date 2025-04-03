@@ -1,3 +1,4 @@
+
 import React from "react";
 import { 
   Card, 
@@ -85,6 +86,13 @@ const getClientName = (clientId: string | undefined | null, clients: any[]): str
   return client?.name || "Unknown Client";
 };
 
+const formatCaseInfo = (caseNumber: string, caseName: string): string => {
+  if (caseName && caseName !== "Unknown Case") {
+    return `${caseName} (${caseNumber || "No Number"})`;
+  }
+  return caseNumber || "Unknown Case";
+};
+
 const ServeHistory: React.FC<ServeHistoryProps> = ({ serves, clients, onDelete, onEdit }) => {
   console.log("ServeHistory component received serves:", serves);
   console.log("ServeHistory component received clients:", clients);
@@ -118,6 +126,8 @@ const ServeHistory: React.FC<ServeHistoryProps> = ({ serves, clients, onDelete, 
         console.log(`Rendering serve ${serve.id}:`, {
           clientName,
           clientId: serve.clientId,
+          caseName: serve.caseName,
+          caseNumber: serve.caseNumber,
           coordinates: serve.coordinates,
           formattedCoordinates: formatCoordinates(serve.coordinates),
           googleMapsLink,
@@ -125,6 +135,9 @@ const ServeHistory: React.FC<ServeHistoryProps> = ({ serves, clients, onDelete, 
           timestamp: serve.timestamp,
           formattedDate: formatDate(serve.timestamp)
         });
+
+        // Get formatted case display
+        const caseDisplay = formatCaseInfo(serve.caseNumber || "Unknown", serve.caseName || "");
 
         return (
           <Card key={serve.id} className="overflow-hidden">
@@ -144,7 +157,7 @@ const ServeHistory: React.FC<ServeHistoryProps> = ({ serves, clients, onDelete, 
               <CardDescription>
                 <span className="flex items-center gap-1">
                   <ClipboardList className="h-3.5 w-3.5" />
-                  <span>Case: {serve.caseName || serve.caseNumber || "Unknown"}</span>
+                  <span>Case: {caseDisplay}</span>
                 </span>
               </CardDescription>
             </CardHeader>

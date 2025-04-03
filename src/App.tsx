@@ -26,7 +26,7 @@ import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
 import { initializeDebugTools } from '@/utils/debugUtils';
 import { normalizeServeDataArray } from "@/utils/dataNormalization";
-import { sendEmail, createServeEmailBody, createDeleteNotificationEmail } from "@/utils/email";
+import { createServeEmailBody, createDeleteNotificationEmail } from "@/utils/email";
 
 // Initialize debug tools for development
 if (process.env.NODE_ENV !== 'production') {
@@ -443,30 +443,21 @@ const AnimatedRoutes = () => {
         serveData.caseNumber || "Unknown Case"
       );
 
-      // Prepare recipients list
-      const recipients = ["info@justlegalsolutions.org"]; // Always include business email
-      
-      // Add client email if available
-      if (clientEmail && clientEmail !== "info@justlegalsolutions.org") {
-        recipients.push(clientEmail);
-      }
+      // Prepare the email data
+      const emailData = {
+        to: serveData.clientEmail || "info@justlegalsolutions.org",
+        subject: `New Serve Attempt Created - ${serveData.caseNumber || "Unknown Case"}`,
+        html: emailBody,
+        imageData: serveData.imageData,
+      };
 
-      console.log("Sending email notification to:", recipients);
-      console.log("Email subject:", `New Serve Attempt Created - ${serveData.caseNumber || "Unknown Case"}`);
+      console.log("Sending email notification via Appwrite function");
+      const emailResult = await appwrite.sendEmailViaFunction(emailData);
 
-      // Send the email
-      try {
-        const emailResult = await sendEmail({
-          to: recipients,
-          subject: `New Serve Attempt Created - ${serveData.caseNumber || "Unknown Case"}`,
-          body: emailBody,
-          html: emailBody,
-          imageData: serveData.imageData
-        });
-
-        console.log("Email sending result:", emailResult);
-      } catch (emailError) {
-        console.error("Failed to send email notification:", emailError);
+      if (emailResult.success) {
+        console.log("Email sent successfully:", emailResult.message);
+      } else {
+        console.error("Failed to send email:", emailResult.message);
       }
 
       // Notify the user
@@ -594,13 +585,15 @@ const AnimatedRoutes = () => {
           recipients.push("info@justlegalsolutions.org");
         }
 
-        console.log("Sending deletion notification to:", recipients);
-        const emailResult = await sendEmail({
+        // Prepare the email data for deletion notification
+        const emailData = {
           to: recipients,
           subject: `Serve Attempt Deleted - ${serve.caseNumber || "Unknown Case"}`,
-          body: emailBody,
           html: emailBody,
-        });
+        };
+
+        console.log("Sending deletion notification via Appwrite function");
+        const emailResult = await appwrite.sendEmailViaFunction(emailData);
 
         if (emailResult.success) {
           console.log("Email sent successfully:", emailResult.message);

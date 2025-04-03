@@ -1,6 +1,4 @@
-
 import { ServeAttemptData } from "@/components/ServeAttempt";
-import { appwrite } from "@/lib/appwrite";
 
 // Base email interface
 export interface EmailData {
@@ -20,18 +18,23 @@ export const createServeEmailBody = (
   timestamp: Date,
   coordinates: { latitude: number; longitude: number } | null,
   attemptNumber: number,
-  caseNumber: string
+  caseNumber: string,
+  caseName?: string
 ): string => {
   const googleMapsLink = coordinates
     ? `https://www.google.com/maps?q=${coordinates.latitude},${coordinates.longitude}`
     : "";
 
+  const caseDisplay = caseName && caseName !== "Unknown Case" 
+    ? `${caseName} (${caseNumber})` 
+    : caseNumber;
+
   return `
     <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px; border: 1px solid #e0e0e0; border-radius: 5px;">
       <h2 style="color: #4f46e5; margin-bottom: 20px;">New Serve Attempt Recorded</h2>
       
-      <p><strong>Case:</strong> ${caseNumber}</p>
       <p><strong>Client:</strong> ${clientName}</p>
+      <p><strong>Case:</strong> ${caseDisplay}</p>
       <p><strong>Date/Time:</strong> ${timestamp.toLocaleString()}</p>
       <p><strong>Attempt #:</strong> ${attemptNumber}</p>
       <p><strong>Location:</strong> ${address}</p>
@@ -56,14 +59,19 @@ export const createUpdateNotificationEmail = (
   timestamp: Date,
   oldStatus: string,
   newStatus: string,
-  notes: string
+  notes: string,
+  caseName?: string
 ): string => {
+  const caseDisplay = caseName && caseName !== "Unknown Case" 
+    ? `${caseName} (${caseNumber})` 
+    : caseNumber;
+
   return `
     <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px; border: 1px solid #e0e0e0; border-radius: 5px;">
       <h2 style="color: #4f46e5; margin-bottom: 20px;">Serve Attempt Updated</h2>
       
-      <p><strong>Case:</strong> ${caseNumber}</p>
       <p><strong>Client:</strong> ${clientName}</p>
+      <p><strong>Case:</strong> ${caseDisplay}</p>
       <p><strong>Date/Time:</strong> ${timestamp.toLocaleString()}</p>
       <p><strong>Status Change:</strong> ${oldStatus} → ${newStatus}</p>
       
@@ -84,14 +92,19 @@ export const createDeleteNotificationEmail = (
   clientName: string,
   caseNumber: string,
   timestamp: Date,
-  reason?: string
+  reason?: string,
+  caseName?: string
 ): string => {
+  const caseDisplay = caseName && caseName !== "Unknown Case" 
+    ? `${caseName} (${caseNumber})` 
+    : caseNumber;
+
   return `
     <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px; border: 1px solid #e0e0e0; border-radius: 5px;">
       <h2 style="color: #e53e3e; margin-bottom: 20px;">Serve Attempt Deleted</h2>
       
-      <p><strong>Case:</strong> ${caseNumber}</p>
       <p><strong>Client:</strong> ${clientName}</p>
+      <p><strong>Case:</strong> ${caseDisplay}</p>
       <p><strong>Original Date/Time:</strong> ${timestamp.toLocaleString()}</p>
       
       ${reason ? `
@@ -107,77 +120,3 @@ export const createDeleteNotificationEmail = (
     </div>
   `;
 };
-
-// Constants for Appwrite messaging
-const PROVIDER_ID = "67ee09ff00384f10d275";
-const TOPIC_ID = "67edfd2d000a20397825";
-
-// Function to send email through Appwrite messaging
-export async function sendEmail(emailData: EmailData): Promise<{ success: boolean; message: string }> {
-  try {
-    console.log("Sending message via Appwrite:", {
-      to: emailData.to,
-      subject: emailData.subject,
-      hasImage: !!emailData.imageData
-    });
-
-    // Create metadata object
-    const metadata: any = { 
-      hasImage: !!emailData.imageData,
-      hasCoordinates: emailData.body.includes("View on Google Maps"),
-      timestamp: new Date().toISOString()
-    };
-    
-    // Add image length if available
-    if (emailData.imageData) {
-      metadata.imageLength = emailData.imageData.length;
-    }
-    
-    // Add coordinates if available
-    if (metadata.hasCoordinates) {
-      metadata.coordinates = emailData.body.match(/https:\/\/www\.google\.com\/maps\?q=([^"]+)/)?.[1] || null;
-    }
-
-    // Format recipients for proper representation in message
-    let recipients: string[] = Array.isArray(emailData.to) ? emailData.to : [emailData.to];
-    
-    // Ensure we have email addresses
-    if (recipients.length === 0) {
-      throw new Error("No recipients specified for email");
-    }
-    
-    // Add the business email if not already in the list
-    const businessEmail = "info@justlegalsolutions.org";
-    if (!recipients.includes(businessEmail)) {
-      recipients.push(businessEmail);
-    }
-
-    // Convert the recipients to a string for the message
-    const recipientsString = recipients.join(", ");
-
-    // Create message payload
-    const messagePayload = {
-      subject: emailData.subject,
-      content: emailData.html || emailData.body,
-      recipients: recipientsString,
-      imageData: emailData.imageData || null,
-      metadata: JSON.stringify(metadata)
-    };
-
-    // Send the message using Appwrite messaging
-    const response = await appwrite.sendMessage(messagePayload, PROVIDER_ID, TOPIC_ID);
-    
-    if (!response) {
-      throw new Error("Failed to send message through Appwrite");
-    }
-
-    console.log("Message sent successfully:", response);
-    return { success: true, message: 'Message sent successfully' };
-  } catch (error) {
-    console.error('Error sending message:', error);
-    return { 
-      success: false, 
-      message: error instanceof Error ? error.message : 'Unknown error sending message' 
-    };
-  }
-}

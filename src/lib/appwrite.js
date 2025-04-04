@@ -425,7 +425,7 @@ export const appwrite = {
       // Generate document ID
       const documentId = ID.unique();
 
-      // Create document with all required fields - REMOVE client_email as it's not in schema
+      // Prepare the payload with required fields
       const payload = {
         client_id: serveData.clientId,
         client_name: clientName,
@@ -436,29 +436,86 @@ export const appwrite = {
         address: address,
         coordinates: coordinates,
         image_data: serveData.imageData || "",
-        timestamp: serveData.timestamp ? serveData.timestamp.toISOString() : new Date().toISOString(),
+        timestamp: serveData.timestamp ? 
+                  (serveData.timestamp instanceof Date ? 
+                    serveData.timestamp.toISOString() : 
+                    new Date(serveData.timestamp).toISOString()) : 
+                  new Date().toISOString(),
         attempt_number: serveData.attemptNumber || 1,
       };
 
-      // Store client email in local state but don't send to Appwrite
-      const clientEmail = serveData.clientEmail;
-      console.log("Client email will be stored locally but not in Appwrite:", clientEmail);
-
-      // Create document without client_email field
-      const response = await databases.createDocument(
-        DATABASE_ID,
-        SERVE_ATTEMPTS_COLLECTION_ID,
+      console.log("Final payload being sent to Appwrite:", {
         documentId,
-        payload
-      );
+        collectionId: SERVE_ATTEMPTS_COLLECTION_ID,
+        databaseId: DATABASE_ID,
+        payloadKeys: Object.keys(payload)
+      });
 
-      // Add the client email back to the response for local use
-      response.clientEmail = clientEmail;
+      // Verify database connection before proceeding
+      try {
+        await databases.listDocuments(DATABASE_ID, CLIENTS_COLLECTION_ID, [Query.limit(1)]);
+        console.log("Database connection verified");
+      } catch (connectionError) {
+        console.error("Database connection error:", connectionError);
+        throw new Error(`Database connection failed: ${connectionError.message}`);
+      }
 
-      console.log("Serve attempt created successfully with ID:", response.$id);
-      return response;
+      // Create document with explicit error handling
+      try {
+        const response = await databases.createDocument(
+          DATABASE_ID,
+          SERVE_ATTEMPTS_COLLECTION_ID,
+          documentId,
+          payload
+        );
+        
+        console.log("Serve attempt created successfully with ID:", response.$id);
+        
+        // Add the client email back to the response for local use
+        if (serveData.clientEmail) {
+          response.clientEmail = serveData.clientEmail;
+        }
+        
+        return response;
+      } catch (dbError) {
+        console.error("Database creation error:", dbError);
+        console.error("Error response:", dbError.response || dbError);
+        throw new Error(`Failed to create serve attempt in database: ${dbError.message}${
+          dbError.response ? ` (Code: ${dbError.response.code})` : ""
+        }`);
+      }
     } catch (error) {
       console.error("Error creating serve attempt:", error);
+      console.error("Error type:", error.constructor.name);
+      console.error("Error details:", error.response || error.message || error);
+      
+      // Optionally attempt to save to local storage as fallback
+      try {
+        console.log("Saving serve attempt to local storage as fallback");
+        const serveAttempts = JSON.parse(localStorage.getItem("serve-tracker-serves") || "[]");
+        const newServe = {
+          id: ID.unique(),
+          clientId: serveData.clientId,
+          clientName: serveData.clientName || "Unknown Client",
+          clientEmail: serveData.clientEmail,
+          caseNumber: serveData.caseNumber || "Unknown",
+          caseName: serveData.caseName || "Unknown Case",
+          coordinates: serveData.coordinates || null,
+          notes: serveData.notes || "",
+          status: serveData.status || "unknown",
+          timestamp: new Date(),
+          attemptNumber: serveData.attemptNumber || 1,
+          imageData: serveData.imageData || null,
+          address: serveData.address || ""
+        };
+        serveAttempts.push(newServe);
+        localStorage.setItem("serve-tracker-serves", JSON.stringify(serveAttempts));
+        console.log("Saved to local storage successfully");
+        return newServe;
+      } catch (localError) {
+        console.error("Failed local storage fallback:", localError);
+      }
+      
       throw error;
     }
   },

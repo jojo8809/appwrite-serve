@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect } from 'react';
 import {
   AlertDialog,
@@ -17,6 +16,8 @@ import { Button } from "@/components/ui/button"
 import { ServeAttemptData } from './ServeAttempt';
 import { useToast } from "@/hooks/use-toast"
 import { Textarea } from "@/components/ui/textarea"
+import { createUpdateNotificationEmail } from "@/utils/email"; // Add this import
+import { appwrite } from "@/lib/appwrite";
 
 interface EditServeDialogProps {
   serve: ServeAttemptData;
@@ -60,6 +61,36 @@ const EditServeDialog: React.FC<EditServeDialogProps> = ({ serve, open, onOpenCh
       const success = await onSave(payload);
       
       if (success) {
+        // Send email notification about the update
+        try {
+          const emailBody = createUpdateNotificationEmail(
+            payload.clientName || "Unknown Client",
+            payload.caseNumber || "Unknown Case",
+            new Date(),
+            updatedServe.status || "unknown",
+            status,
+            notes,
+            payload.caseName
+          );
+
+          // Prepare the email data
+          const emailData = {
+            to: [
+              payload.clientEmail || "info@justlegalsolutions.org", 
+              "info@justlegalsolutions.org" // Always include the business email
+            ],
+            subject: `Serve Attempt Updated - ${payload.caseNumber || "Unknown Case"}`,
+            html: emailBody
+          };
+
+          // Send the email notification
+          await appwrite.sendEmailViaFunction(emailData);
+          console.log("Update notification email sent successfully");
+        } catch (emailError) {
+          console.error("Error sending update notification email:", emailError);
+          // Continue with the update even if email fails
+        }
+
         toast({
           title: "Serve updated",
           description: "Serve attempt has been updated successfully"

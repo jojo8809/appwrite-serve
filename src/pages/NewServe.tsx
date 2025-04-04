@@ -86,13 +86,23 @@ const NewServe: React.FC<NewServeProps> = ({ clients, addServe }) => {
       console.log("Full serve data being saved:", {
         ...serveData,
         coordinates: formattedCoordinates,
+        timestamp: new Date().toISOString(), // Ensure timestamp is current
       });
 
-      // Save the serve data
-      addServe({
+      // Explicitly add timestamp if not present
+      if (!serveData.timestamp) {
+        serveData.timestamp = new Date();
+      }
+      
+      // Save the serve data with explicit error handling
+      const result = await addServe({
         ...serveData,
         coordinates: formattedCoordinates, // Ensure coordinates are a string
       });
+      
+      if (!result) {
+        throw new Error("Failed to save serve attempt. No error details available.");
+      }
 
       toast({
         title: "Serve recorded",
@@ -105,7 +115,9 @@ const NewServe: React.FC<NewServeProps> = ({ clients, addServe }) => {
       console.error("Error saving serve attempt:", error);
       toast({
         title: "Error",
-        description: error.message || "Failed to save serve attempt",
+        description: error instanceof Error ? 
+          (error.message || "Unknown error") : 
+          "Failed to save serve attempt",
         variant: "destructive",
       });
     }

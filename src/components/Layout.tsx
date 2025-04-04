@@ -3,6 +3,7 @@ import React, { useEffect } from "react";
 import { Outlet, useLocation } from "react-router-dom";
 import { Header } from "./Header";
 import { cn } from "@/lib/utils";
+import { useIsMobile } from "@/hooks/use-mobile";
 
 interface LayoutProps {
   className?: string;
@@ -10,6 +11,7 @@ interface LayoutProps {
 
 const Layout: React.FC<LayoutProps> = ({ className }) => {
   const location = useLocation();
+  const isMobile = useIsMobile();
   
   // Set CSS variables for mobile viewport height
   useEffect(() => {
@@ -35,7 +37,8 @@ const Layout: React.FC<LayoutProps> = ({ className }) => {
       <Header />
       <main 
         className={cn(
-          "flex-1 page-transition page-container pb-12 overflow-x-hidden overflow-y-auto overscroll-contain", 
+          "flex-1 page-transition pb-12 overflow-x-hidden overflow-y-auto overscroll-contain", 
+          isMobile ? "pt-4 px-4" : "page-container",
           className
         )}
         style={{ 

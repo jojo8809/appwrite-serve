@@ -17,7 +17,8 @@ import {
   MapPin,
   Clock,
   CheckCircle,
-  AlertCircle
+  AlertCircle,
+  Plus
 } from "lucide-react";
 import { ServeAttemptData } from "@/components/ServeAttempt";
 import { ClientData } from "@/components/ClientForm";
@@ -26,6 +27,7 @@ import EditServeDialog from "@/components/EditServeDialog";
 import { appwrite } from "@/lib/appwrite";
 import { useToast } from "@/hooks/use-toast";
 import { normalizeServeDataArray } from "@/utils/dataNormalization";
+import { useIsMobile } from "@/hooks/use-mobile";
 
 interface DashboardProps {
   clients: ClientData[];
@@ -34,6 +36,7 @@ interface DashboardProps {
 
 const Dashboard: React.FC<DashboardProps> = ({ clients, serves }) => {
   const { toast } = useToast();
+  const isMobile = useIsMobile();
   const [localServes, setLocalServes] = useState<ServeAttemptData[]>([]);
   const [editingServe, setEditingServe] = useState<ServeAttemptData | null>(null);
   const [editDialogOpen, setEditDialogOpen] = useState(false);
@@ -189,17 +192,17 @@ const Dashboard: React.FC<DashboardProps> = ({ clients, serves }) => {
   };
 
   return (
-    <div className="page-container">
-      <div className="mb-8 text-center md:text-left">
-        <h1 className="text-3xl font-bold tracking-tight mb-2">Process Server Dashboard</h1>
-        <p className="text-muted-foreground">
+    <div className={isMobile ? "" : "page-container"}>
+      <div className={`mb-6 ${isMobile ? "text-center" : "text-center md:text-left"}`}>
+        <h1 className="text-2xl md:text-3xl font-bold tracking-tight mb-2">Process Server Dashboard</h1>
+        <p className="text-muted-foreground text-sm md:text-base">
           Track your serve attempts, manage clients, and send documentation
         </p>
       </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-4 md:gap-6 mb-6 md:mb-8">
         <Card className="glass-card">
-          <CardContent className="pt-6">
+          <CardContent className="pt-6 pb-4">
             <div className="flex items-center justify-between">
               <div>
                 <p className="text-muted-foreground text-sm font-medium">Total Clients</p>
@@ -210,7 +213,7 @@ const Dashboard: React.FC<DashboardProps> = ({ clients, serves }) => {
               </div>
             </div>
             <Link to="/clients">
-              <Button variant="ghost" className="w-full mt-4 text-xs">
+              <Button variant="ghost" className="w-full mt-3 text-xs">
                 Manage Clients <ArrowRight className="ml-2 h-3 w-3" />
               </Button>
             </Link>
@@ -218,7 +221,7 @@ const Dashboard: React.FC<DashboardProps> = ({ clients, serves }) => {
         </Card>
 
         <Card className="glass-card">
-          <CardContent className="pt-6">
+          <CardContent className="pt-6 pb-4">
             <div className="flex items-center justify-between">
               <div>
                 <p className="text-muted-foreground text-sm font-medium">Today's Activity</p>
@@ -243,7 +246,7 @@ const Dashboard: React.FC<DashboardProps> = ({ clients, serves }) => {
         </Card>
 
         <Card className="glass-card">
-          <CardContent className="pt-6">
+          <CardContent className="pt-6 pb-4">
             <div className="flex items-center justify-between">
               <div>
                 <p className="text-muted-foreground text-sm font-medium">Serve Status</p>
@@ -253,7 +256,7 @@ const Dashboard: React.FC<DashboardProps> = ({ clients, serves }) => {
                 <ClipboardList className="h-6 w-6" />
               </div>
             </div>
-            <div className="mt-4 flex gap-2">
+            <div className="mt-3 flex gap-2">
               <div className="flex-1 flex items-center gap-1.5 rounded-md bg-green-500/10 text-green-700 p-2 text-xs">
                 <CheckCircle className="h-3.5 w-3.5" />
                 {completedCount} Completed
@@ -267,10 +270,10 @@ const Dashboard: React.FC<DashboardProps> = ({ clients, serves }) => {
         </Card>
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-        <div className="lg:col-span-2 space-y-6">
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+        <div className="lg:col-span-2 space-y-4 md:space-y-6">
           <div className="flex justify-between items-center">
-            <h2 className="text-xl font-semibold tracking-tight">Recent Serve Activity</h2>
+            <h2 className="text-lg md:text-xl font-semibold tracking-tight">Recent Serve Activity</h2>
             <Link to="/history">
               <Button variant="ghost" size="sm">
                 View All
@@ -279,7 +282,7 @@ const Dashboard: React.FC<DashboardProps> = ({ clients, serves }) => {
           </div>
 
           {isLoading ? (
-            <Card className="p-8 text-center">
+            <Card className="p-6 md:p-8 text-center">
               <p className="text-muted-foreground">Loading serve history...</p>
             </Card>
           ) : recentServes.length > 0 ? (
@@ -290,12 +293,12 @@ const Dashboard: React.FC<DashboardProps> = ({ clients, serves }) => {
             />
           ) : (
             <Card className="neo-card">
-              <CardContent className="pt-6 flex flex-col items-center justify-center text-center min-h-[200px]">
+              <CardContent className="pt-6 flex flex-col items-center justify-center text-center min-h-[180px] md:min-h-[200px]">
                 <div className="p-4 rounded-full bg-muted mb-4">
-                  <Camera className="h-8 w-8 text-muted-foreground/50" />
+                  <Camera className="h-7 w-7 text-muted-foreground/50" />
                 </div>
-                <CardTitle className="mb-2">No serve records yet</CardTitle>
-                <CardDescription className="mb-4">
+                <CardTitle className="mb-2 text-base md:text-lg">No serve records yet</CardTitle>
+                <CardDescription className="mb-4 text-xs md:text-sm">
                   Start a new serve attempt to create your first record
                 </CardDescription>
                 <Link to="/new-serve">
@@ -309,19 +312,19 @@ const Dashboard: React.FC<DashboardProps> = ({ clients, serves }) => {
           )}
         </div>
 
-        <div className="space-y-6">
-          <h2 className="text-xl font-semibold tracking-tight">Quick Actions</h2>
+        <div className="space-y-4 md:space-y-6">
+          <h2 className="text-lg md:text-xl font-semibold tracking-tight">Quick Actions</h2>
           
-          <div className="space-y-4">
+          <div className="space-y-3 md:space-y-4">
             <Link to="/new-serve" className="block">
               <Card className="hover:bg-accent transition-colors">
-                <CardContent className="pt-6 pb-6 flex items-center gap-4">
+                <CardContent className="py-4 md:py-6 flex items-center gap-4">
                   <div className="p-3 rounded-full bg-primary/10 text-primary">
                     <Camera className="h-5 w-5" />
                   </div>
                   <div>
                     <CardTitle className="text-base">New Serve Attempt</CardTitle>
-                    <CardDescription>
+                    <CardDescription className="text-xs">
                       Capture photo with GPS data
                     </CardDescription>
                   </div>
@@ -331,13 +334,13 @@ const Dashboard: React.FC<DashboardProps> = ({ clients, serves }) => {
             
             <Link to="/clients" className="block">
               <Card className="hover:bg-accent transition-colors">
-                <CardContent className="pt-6 pb-6 flex items-center gap-4">
+                <CardContent className="py-4 md:py-6 flex items-center gap-4">
                   <div className="p-3 rounded-full bg-primary/10 text-primary">
                     <Users className="h-5 w-5" />
                   </div>
                   <div>
                     <CardTitle className="text-base">Manage Clients</CardTitle>
-                    <CardDescription>
+                    <CardDescription className="text-xs">
                       Add or edit client information
                     </CardDescription>
                   </div>
@@ -347,13 +350,13 @@ const Dashboard: React.FC<DashboardProps> = ({ clients, serves }) => {
             
             <Link to="/history" className="block">
               <Card className="hover:bg-accent transition-colors">
-                <CardContent className="pt-6 pb-6 flex items-center gap-4">
+                <CardContent className="py-4 md:py-6 flex items-center gap-4">
                   <div className="p-3 rounded-full bg-primary/10 text-primary">
                     <MapPin className="h-5 w-5" />
                   </div>
                   <div>
                     <CardTitle className="text-base">View Serve History</CardTitle>
-                    <CardDescription>
+                    <CardDescription className="text-xs">
                       Review all past serve attempts
                     </CardDescription>
                   </div>

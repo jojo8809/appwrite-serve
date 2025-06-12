@@ -2,21 +2,18 @@ import { Client, Account, Databases, Storage, ID, Query, Teams, Functions } from
 import { APPWRITE_CONFIG } from '@/config/backendConfig';
 import { createServeEmailBody } from "@/utils/email"; 
 
-// Initialize Appwrite client
 const client = new Client();
 
 client
   .setEndpoint(import.meta.env.VITE_APPWRITE_ENDPOINT || APPWRITE_CONFIG.endpoint)
   .setProject(import.meta.env.VITE_APPWRITE_PROJECT_ID || APPWRITE_CONFIG.projectId);
 
-// Initialize Appwrite services
 const account = new Account(client);
 const databases = new Databases(client);
 const storage = new Storage(client);
 const teams = new Teams(client);
 const functions = new Functions(client);
 
-// Database and collection IDs from config
 const DATABASE_ID = APPWRITE_CONFIG.databaseId;
 const CLIENTS_COLLECTION_ID = APPWRITE_CONFIG.collections.clients;
 const SERVE_ATTEMPTS_COLLECTION_ID = APPWRITE_CONFIG.collections.serveAttempts;
@@ -24,7 +21,6 @@ const CASES_COLLECTION_ID = APPWRITE_CONFIG.collections.clientCases;
 const DOCUMENTS_COLLECTION_ID = APPWRITE_CONFIG.collections.clientDocuments;
 const STORAGE_BUCKET_ID = APPWRITE_CONFIG.storageBucket;
 
-// Helper functions for CRUD operations
 export const appwrite = {
   client,
   account,
@@ -40,7 +36,6 @@ export const appwrite = {
   DOCUMENTS_COLLECTION_ID,
   STORAGE_BUCKET_ID,
 
-  // Add messaging functionality for SMTP integration
   async sendMessage(payload, providerId, topicId) {
     try {
       console.log(`Sending message via Appwrite messaging with provider ${providerId} and topic ${topicId}`);
@@ -50,13 +45,11 @@ export const appwrite = {
         hasImageData: !!payload.imageData,
       });
 
-      // Check if we have the necessary data
       if (!payload.subject || !payload.content || !payload.recipients) {
         throw new Error("Missing required fields for email: subject, content, or recipients");
       }
 
       try {
-        // Using Appwrite functions to send the email via the topic subscription
         const result = await functions.createExecution(
           "sendEmail",
           JSON.stringify({
@@ -64,15 +57,14 @@ export const appwrite = {
             html: payload.content,
             to: payload.recipients.split(", ")
           }),
-          false, // async execution
-          "", // no path
-          "POST", // method
-          {} // no headers
+          false, 
+          "", 
+          "POST", 
+          {} 
         );
         
         console.log("Email function execution result:", result);
         
-        // If execution was successfully created but we need to check for its status
         if (result.$id) {
           return { 
             success: true,
@@ -85,10 +77,8 @@ export const appwrite = {
       } catch (fnError) {
         console.error("Error executing email function:", fnError);
         
-        // Fallback to direct messaging API
         console.log("Falling back to direct messaging API call");
         
-        // If function execution fails, try direct API call
         const endpoint = `${client.config.endpoint}/messaging/topics/${topicId}/subscribers`;
         
         const headers = {
@@ -102,7 +92,6 @@ export const appwrite = {
           headers['X-Appwrite-JWT'] = client.config.jwt;
         }
         
-        // Create the message data
         const messageData = {
           userId: 'unique',
           providerType: 'smtp',
@@ -115,7 +104,6 @@ export const appwrite = {
           metadata: payload.metadata || {},
         };
         
-        // If we have an image, add it to the message
         if (payload.imageData) {
           messageData.content.attachments = [{
             content: payload.imageData,
@@ -124,7 +112,6 @@ export const appwrite = {
           }];
         }
         
-        // Make the API request
         const response = await fetch(endpoint, {
           method: 'POST',
           headers: headers,
@@ -146,10 +133,8 @@ export const appwrite = {
     }
   },
 
-  // Add a method to call the Appwrite email function
   async sendEmailViaFunction(emailData) {
     try {
-      // Ensure the business email is included
       const businessEmail = 'info@justlegalsolutions.org';
       const recipients = Array.isArray(emailData.to) ? [...emailData.to] : [emailData.to];
       if (!recipients.some(email => email.toLowerCase() === businessEmail.toLowerCase())) {
@@ -157,7 +142,7 @@ export const appwrite = {
       }
 
       const response = await functions.createExecution(
-        "67ed8899003a8b119a18", // Correct function ID
+        "67ed8899003a8b119a18", 
         JSON.stringify({ ...emailData, to: recipients })
       );
 
@@ -174,12 +159,10 @@ export const appwrite = {
     }
   },
 
-  // Add the setupRealtimeSubscription function
   setupRealtimeSubscription(callback) {
     try {
       console.log("Setting up realtime subscription for Appwrite");
       
-      // Subscribe to all collections
       const unsubscribe = client.subscribe([
         `databases.${DATABASE_ID}.collections.${CLIENTS_COLLECTION_ID}.documents`,
         `databases.${DATABASE_ID}.collections.${SERVE_ATTEMPTS_COLLECTION_ID}.documents`,
@@ -192,16 +175,14 @@ export const appwrite = {
       return unsubscribe;
     } catch (error) {
       console.error("Error setting up Appwrite realtime subscription:", error);
-      return () => {}; // Return empty cleanup function
+      return () => {};
     }
   },
 
-  // Utility to check if Appwrite is properly configured
   isAppwriteConfigured() {
     return !!APPWRITE_CONFIG.projectId && !!APPWRITE_CONFIG.endpoint;
   },
 
-  // Client operations
   async getClients() {
     try {
       const response = await databases.listDocuments(DATABASE_ID, CLIENTS_COLLECTION_ID);
@@ -318,7 +299,6 @@ export const appwrite = {
     }
   },
 
-  // Serve attempts operations
   async getServeAttempts() {
     try {
       const response = await databases.listDocuments(DATABASE_ID, SERVE_ATTEMPTS_COLLECTION_ID);
@@ -445,7 +425,7 @@ export const appwrite = {
         payload
       );
       
-      console.log("Serve attempt created successfully with ID:", response.$id);
+      console.log("Serve attempt saved successfully with ID:", response.$id);
       
       if (serveData.clientEmail) {
         response.clientEmail = serveData.clientEmail;
@@ -462,15 +442,19 @@ export const appwrite = {
           response.case_name
         );
     
+        // THIS IS THE CORRECTED CODE BLOCK
         const emailData = {
           to: serveData.clientEmail || "info@justlegalsolutions.org",
           subject: `New Serve Attempt Created - ${response.case_name}`,
           html: emailBody,
           imageData: response.image_data, 
-          serveId: response.$id // We now pass the ID from the successfully created document.
+          // We now send the coordinates and notes directly to the function
+          // instead of the serveId. This avoids the race condition.
+          coordinates: response.coordinates,
+          notes: response.notes
         };
     
-        console.log("Sending email with confirmed serveId:", response.$id);
+        console.log("Sending email with full data payload...");
         const emailResult = await this.sendEmailViaFunction(emailData);
     
         if (emailResult.success) {
@@ -666,7 +650,6 @@ export const appwrite = {
     }
   },
 
-  // Case operations
   async getClientCases(clientId) {
     try {
       const response = await databases.listDocuments(
@@ -763,7 +746,6 @@ export const appwrite = {
     }
   },
 
-  // Storage operations
   async uploadClientDocument(clientId, file, caseNumber, description) {
     try {
       const fileId = ID.unique();
@@ -819,7 +801,6 @@ export const appwrite = {
     try {
       console.log(`Attempting to delete document with ID: ${docId} and fileId: ${fileId}`);
 
-      // Validate fileId
       if (fileId && (!/^[a-zA-Z0-9_]{1,36}$/.test(fileId) || fileId.startsWith('_'))) {
         console.warn(`Invalid fileId: ${fileId}. Skipping file deletion.`);
       } else if (fileId) {
@@ -827,7 +808,6 @@ export const appwrite = {
         console.log(`Successfully deleted file with fileId: ${fileId}`);
       }
 
-      // Delete the document from the database
       await databases.deleteDocument(DATABASE_ID, DOCUMENTS_COLLECTION_ID, docId);
       console.log(`Successfully deleted document with ID: ${docId}`);
       return true;

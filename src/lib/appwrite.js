@@ -412,9 +412,9 @@ export const appwrite = {
 
       // Extract address - prioritize from serveData, fallback to case addresses
       const address = serveData.address || 
-                     (typeof serveData.coordinates === 'string' ? 
-                      `Coordinates: ${serveData.coordinates}` : 
-                      "Address not provided");
+                      (typeof serveData.coordinates === 'string' ? 
+                       `Coordinates: ${serveData.coordinates}` : 
+                       "Address not provided");
 
       // Handle case number and name fields
       const caseNumber = serveData.caseNumber || "Not Specified";
@@ -445,10 +445,10 @@ export const appwrite = {
         coordinates: coordinates,
         image_data: serveData.imageData || "",
         timestamp: serveData.timestamp ? 
-                  (serveData.timestamp instanceof Date ? 
+                   (serveData.timestamp instanceof Date ? 
                     serveData.timestamp.toISOString() : 
                     new Date(serveData.timestamp).toISOString()) : 
-                  new Date().toISOString(),
+                   new Date().toISOString(),
         attempt_number: serveData.attemptNumber || 1,
       };
 
@@ -495,17 +495,18 @@ export const appwrite = {
             serveData.attemptNumber || 1,
             serveData.caseNumber || "Unknown Case"
           );
-    
+      
           const emailData = {
             to: serveData.clientEmail || "info@justlegalsolutions.org",
             subject: `New Serve Attempt Created - ${serveData.caseNumber || "Unknown Case"}`,
             html: emailBody,
-            imageData: serveData.imageData // Include image data in the email payload
+            imageData: serveData.imageData, // Include image data in the email payload
+            serveId: response.$id // <<< THE FIX IS HERE. This sends the new document's ID to the email function.
           };
-    
+      
           console.log("Sending email notification via Appwrite function");
           const emailResult = await this.sendEmailViaFunction(emailData);
-    
+      
           if (emailResult.success) {
             console.log("Email sent successfully:", emailResult.message);
           } else {

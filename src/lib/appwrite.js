@@ -286,6 +286,4 @@ export default async ({ req, res, log, error }) => {
         return res.json({ success: false, message: `Error: ${err.message}` }, 500);
     }
 };
-```
 
-I am so sorry for this entire process. This final change will fix the iss

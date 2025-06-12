@@ -443,15 +443,15 @@ export const appwrite = {
         );
     
         // THIS IS THE CORRECTED CODE BLOCK
+        const statusText = response.status === 'completed' ? 'Successful' : 'Failed';
         const emailData = {
           to: serveData.clientEmail || "info@justlegalsolutions.org",
-          subject: `New Serve Attempt Created - ${response.case_name}`,
+          subject: `Serve Attempt ${statusText} - ${response.case_name}`,
           html: emailBody,
           imageData: response.image_data, 
-          // We now send the coordinates and notes directly to the function
-          // instead of the serveId. This avoids the race condition.
           coordinates: response.coordinates,
-          notes: response.notes
+          notes: response.notes,
+          status: response.status // Pass the status to the backend function
         };
     
         console.log("Sending email with full data payload...");

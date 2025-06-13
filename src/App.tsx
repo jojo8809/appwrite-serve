@@ -44,7 +44,7 @@ declare global {
 // Debug helper for older browser console support
 window.debugAppwrite = function() {
   console.log('Appwrite Config:', {
-    endpoint: import.meta.env.VITE_APPWRITE_ENDPOINT || "https://cloud.appwrite.io/v1",
+    endpoint: import.meta.env.VITE_APPWRITE_ENDPOINT || "https://nyc.cloud.appwrite.io/v1",
     projectId: import.meta.env.VITE_APPWRITE_PROJECT_ID || "67ead974001245b7c6aa",
     databaseId: import.meta.env.VITE_APPWRITE_DATABASE_ID || "67eae6fe0020c6721531",
     clientsCollectionId: import.meta.env.VITE_APPWRITE_CLIENTS_COLLECTION_ID || "67eae70e000c042112c8",

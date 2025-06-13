@@ -11,7 +11,7 @@ export const ACTIVE_BACKEND = BACKEND_PROVIDER.APPWRITE;
 
 // Appwrite configuration
 export const APPWRITE_CONFIG = {
-  endpoint: import.meta.env.VITE_APPWRITE_ENDPOINT || 'https://cloud.appwrite.io/v1',
+  endpoint: import.meta.env.VITE_APPWRITE_ENDPOINT || 'https://nyc.cloud.appwrite.io/v1',
   projectId: import.meta.env.VITE_APPWRITE_PROJECT_ID || '67ead974001245b7c6aa',
   databaseId: '67eae6fe0020c6721531',
   collections: {

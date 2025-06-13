@@ -17,7 +17,7 @@ export const APPWRITE_CONFIG = {
   collections: {
     clients: '67eae70e000c042112c8',
     clientCases: '67eae98f0017c9503bee',
-    serveAttempts: '67eae7ef0034c7ad35f6',
+    serveAttempts: '684c14fb002f6275b932',
     clientDocuments: '67eaeaa900128f318514',
   },
   storageBucket: import.meta.env.VITE_APPWRITE_STORAGE_BUCKET_ID || '67eaeb7700322d74597e',

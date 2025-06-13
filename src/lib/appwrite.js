@@ -442,16 +442,15 @@ export const appwrite = {
           response.case_name
         );
     
-        // THIS IS THE CORRECTED CODE BLOCK
         const statusText = response.status === 'completed' ? 'Successful' : 'Failed';
         const emailData = {
           to: serveData.clientEmail || "info@justlegalsolutions.org",
-          subject: `Serve Attempt ${statusText} - ${response.case_name}`,
+          subject: `New Serve Attempt ${statusText} - ${response.case_name}`,
           html: emailBody,
           imageData: response.image_data, 
           coordinates: response.coordinates,
           notes: response.notes,
-          status: response.status // Pass the status to the backend function
+          status: response.status
         };
     
         console.log("Sending email with full data payload...");
@@ -544,6 +543,42 @@ export const appwrite = {
 
         console.log("Update response:", response);
 
+        // --- THIS IS THE NEW CODE ---
+        try {
+          // Fetch the client's data to get their email
+          const client = await databases.getDocument(DATABASE_ID, CLIENTS_COLLECTION_ID, response.client_id);
+          const clientEmail = client.email;
+          
+          if (clientEmail) {
+            const emailBody = createServeEmailBody(
+              response.client_name,
+              response.address,
+              response.notes,
+              new Date(response.timestamp),
+              response.coordinates,
+              response.attempt_number,
+              response.case_name
+            );
+
+            const statusText = response.status === 'completed' ? 'Successful' : 'Failed';
+            const emailData = {
+              to: clientEmail,
+              subject: `Serve Attempt Updated - ${response.case_name}`,
+              html: emailBody,
+              imageData: response.image_data, 
+              coordinates: response.coordinates,
+              notes: response.notes,
+              status: response.status
+            };
+
+            console.log("Sending update email notification...");
+            await this.sendEmailViaFunction(emailData);
+          }
+        } catch (emailError) {
+          console.error("Error sending update email notification:", emailError);
+        }
+        // --- END OF NEW CODE ---
+        
         await this.syncAppwriteServesToLocal();
 
         return response;
